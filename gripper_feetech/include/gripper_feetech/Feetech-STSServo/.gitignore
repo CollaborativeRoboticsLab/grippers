@@ -1,0 +1,30 @@
+# Ignore compiled binaries (built in repo root)
+/simple_motion
+/continous_motion
+/change_servo_id
+/move_synchronously
+/velocity_mode
+/follow_servo
+/move_to_home
+/step_mode
+
+# Common build artifacts
+*.o
+*.obj
+*.out
+*.a
+*.so
+*.dylib
+*.exe
+*.stackdump
+*.log
+
+# Optional: build directories
+/build/
+/bin/
+/obj/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
