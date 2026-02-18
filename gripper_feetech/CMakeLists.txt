@@ -7,9 +7,32 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(gripper_msgs REQUIRED)
+
+add_executable(gripper_feetech_action_node
+  src/node.cpp
+)
+
+target_include_directories(gripper_feetech_action_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(gripper_feetech_action_node
+  rclcpp
+  rclcpp_action
+  gripper_msgs
+)
+
+install(TARGETS gripper_feetech_action_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY include/
+  DESTINATION include/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

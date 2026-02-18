@@ -1,0 +1,30 @@
+gripper_feetech_action_node:
+  ros__parameters:
+    # Transport
+    device_name: /dev/ttyUSB0
+    baudrate: 1000000
+    servo_id: 1
+
+    # Gripper targets
+    # If position_is_radians=true, these are radians and will be converted to ticks.
+    # Otherwise these are raw servo ticks.
+    position_is_radians: false
+    ticks_per_rev: 4096
+    direction: 1
+    zero_offset_ticks: 0
+
+    open_position: 0.0
+    close_position: 2048.0
+
+    # Motion behavior
+    speed: 4095
+    goal_tolerance_ticks: 20
+    motion_timeout_sec: 3.0
+    poll_rate_hz: 30.0
+
+    # Torque limiting (Feetech-style "torque mode" implemented as a torque limit)
+    use_torque_mode: false
+    default_torque_limit: 0.0
+    torque_limit_register: 48  # 0x30 TORQUE_LIMIT
+
+    close_default: true

@@ -1,0 +1,16 @@
+# Goal
+# If false (default-constructed goal), the node may use a configured default (typically true).
+bool close
+
+# Requested torque to use in torque-mode. If 0.0, the node may use a configured default.
+float64 torque
+
+# Optional switch to use torque-mode. If false, the node may still use torque-mode if configured via parameter.
+bool use_torque_mode
+---
+# Result
+bool success
+string message
+---
+# Feedback
+float32 progress

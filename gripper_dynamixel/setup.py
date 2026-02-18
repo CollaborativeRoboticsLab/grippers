@@ -1,5 +1,8 @@
 from setuptools import find_packages, setup
 
+import os
+from glob import glob
+
 package_name = 'gripper_dynamixel'
 
 setup(
@@ -10,8 +13,9 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'dynamixel-sdk', 'pyyaml'],
     zip_safe=True,
     maintainer='kalana',
     maintainer_email='kalanaratnayake95@gmail.com',
@@ -24,6 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'gripper_dynamixel_action_node = gripper_dynamixel.gripper_action_node:main',
         ],
     },
 )
