@@ -19,17 +19,18 @@ Hardware-specific Dynamixel control should be added in `_apply_position` / `_app
 from __future__ import annotations
 
 import math
-import os
 import time
-from typing import Optional
+from typing import Callable, Optional, TypeVar
 
 import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.node import Node
-from rclpy.parameter import Parameter
 
 from gripper_msgs.action import CloseGripper, OpenGripper
 from dynamixel_sdk import PacketHandler, PortHandler
+
+
+T = TypeVar('T')
 
 class DynamixelProtocol2Driver:
     def __init__(
@@ -180,6 +181,13 @@ class DynamixelGripperActionNode(Node):
         self.declare_parameter(self.motor_model + '.motion_timeout_sec', 3.0)
         self.declare_parameter(self.motor_model + '.poll_rate_hz', 30.0)
 
+        # Transient Dynamixel comm error retry settings
+        self.declare_parameter(self.motor_model + '.comm_retry_timeout_sec', 2.0)
+        self.declare_parameter(self.motor_model + '.comm_retry_initial_delay_sec', 0.05)
+        self.declare_parameter(self.motor_model + '.comm_retry_max_delay_sec', 0.5)
+        self.declare_parameter(self.motor_model + '.comm_retry_backoff', 1.7)
+        self.declare_parameter(self.motor_model + '.comm_retry_reinit_every', 5)
+
         self._dxl: Optional[DynamixelProtocol2Driver] = None
 
         self._init_dynamixel()
@@ -238,6 +246,78 @@ class DynamixelGripperActionNode(Node):
             self._dxl = None
             self.get_logger().error(f'Failed to initialize Dynamixel SDK driver: {exc}')
 
+    def _reinit_dynamixel(self) -> None:
+        if self._dxl is not None:
+            try:
+                self._dxl.close()
+            except Exception:  # noqa: BLE001
+                pass
+        self._dxl = None
+        self._init_dynamixel()
+
+    def _is_retryable_dxl_exception(self, exc: Exception) -> bool:
+        msg = str(exc).lower()
+        # Observed transient issues (noise / bus contention / startup flakiness):
+        # - "There is no status packet!"
+        # - "CRC doesn't match!"
+        if 'there is no status packet' in msg:
+            return True
+        if 'crc' in msg and 'match' in msg:
+            return True
+        # Also treat generic comm failures as retryable.
+        if 'communication failed' in msg:
+            return True
+        if '[txrxresult]' in msg:
+            return True
+        return False
+
+    def _dxl_with_retry(
+        self,
+        goal_handle,
+        op: str,
+        fn: Callable[[], T],
+    ) -> T:
+        timeout = float(self.get_parameter(self.motor_model + '.comm_retry_timeout_sec').value)
+        delay = float(self.get_parameter(self.motor_model + '.comm_retry_initial_delay_sec').value)
+        max_delay = float(self.get_parameter(self.motor_model + '.comm_retry_max_delay_sec').value)
+        backoff = float(self.get_parameter(self.motor_model + '.comm_retry_backoff').value)
+        reinit_every = int(self.get_parameter(self.motor_model + '.comm_retry_reinit_every').value)
+        reinit_every = 0 if reinit_every < 0 else reinit_every
+
+        deadline = time.monotonic() + max(0.0, timeout)
+        attempt = 0
+        last_exc: Optional[Exception] = None
+
+        while True:
+            if goal_handle is not None and goal_handle.is_cancel_requested:
+                raise RuntimeError(f'{op} canceled')
+
+            if self._dxl is None:
+                self._init_dynamixel()
+                if self._dxl is None:
+                    raise RuntimeError(f'{op} failed: Dynamixel driver is not initialized.')
+
+            try:
+                return fn()
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                attempt += 1
+
+                if not self._is_retryable_dxl_exception(exc):
+                    raise
+
+                if timeout <= 0.0 or time.monotonic() >= deadline:
+                    raise RuntimeError(f'{op} failed after retries: {exc}') from exc
+
+                if reinit_every > 0 and (attempt % reinit_every) == 0:
+                    self.get_logger().warn(f'{op}: transient error, reinitializing Dynamixel driver (attempt {attempt}): {exc}')
+                    self._reinit_dynamixel()
+                elif attempt == 1 or (attempt % 10) == 0:
+                    self.get_logger().warn(f'{op}: transient error, retrying (attempt {attempt}): {exc}')
+
+                time.sleep(max(0.0, delay))
+                delay = min(max_delay, max(delay, 0.0) * max(1.0, backoff))
+
     def _position_to_ticks(self, position_value: float) -> int:
         if not bool(self.get_parameter(self.motor_model + '.position_is_radians').value):
             # Treat the parameter directly as ticks.
@@ -266,37 +346,42 @@ class DynamixelGripperActionNode(Node):
         # Treat goal_flag as an explicit enable. If false, fall back to parameter default.
         return bool(goal_flag) or bool(self.get_parameter(self.motor_model + '.use_torque_mode').value)
 
-    def _apply_position(self, target_position: float) -> int:
+    def _apply_position(self, goal_handle, target_position: float) -> int:
         if self._dxl is None:
             raise RuntimeError('Dynamixel driver is not initialized.')
 
         target_ticks = self._position_to_ticks(target_position)
-        self._dxl.disable_torque()
-        self._dxl.set_operating_mode(self._dxl.mode_position)
-        self._dxl.enable_torque()
-        self._dxl.write_goal_position(target_ticks)
+
+        self._dxl_with_retry(goal_handle, 'disable_torque', self._dxl.disable_torque)
+        self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_position))
+        self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+        self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
         return target_ticks
 
-    def _apply_torque(self, torque: float, target_position: Optional[float]) -> Optional[int]:
+    def _apply_torque(self, goal_handle, torque: float, target_position: Optional[float]) -> Optional[int]:
         if self._dxl is None:
             raise RuntimeError('Dynamixel driver is not initialized.')
 
         # `torque` is treated as a raw Goal Current value by default (model-specific units).
         goal_current = int(round(torque))
 
-        self._dxl.disable_torque()
+        self._dxl_with_retry(goal_handle, 'disable_torque', self._dxl.disable_torque)
 
         if target_position is None:
-            self._dxl.set_operating_mode(self._dxl.mode_current)
-            self._dxl.enable_torque()
-            self._dxl.write_goal_current(goal_current)
+            self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_current))
+            self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+            self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
             return None
 
         target_ticks = self._position_to_ticks(float(target_position))
-        self._dxl.set_operating_mode(self._dxl.mode_current_based_position)
-        self._dxl.enable_torque()
-        self._dxl.write_goal_current(goal_current)
-        self._dxl.write_goal_position(target_ticks)
+        self._dxl_with_retry(
+            goal_handle,
+            'set_operating_mode',
+            lambda: self._dxl.set_operating_mode(self._dxl.mode_current_based_position),
+        )
+        self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+        self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
+        self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
         return target_ticks
 
     def _run_motion_loop(self, goal_handle, feedback_cls, *, target_ticks: Optional[int]) -> bool:
@@ -354,9 +439,9 @@ class DynamixelGripperActionNode(Node):
 
         try:
             if use_torque_mode:
-                target_ticks = self._apply_torque(torque, open_position)
+                target_ticks = self._apply_torque(goal_handle, torque, open_position)
             else:
-                target_ticks = self._apply_position(open_position)
+                target_ticks = self._apply_position(goal_handle, open_position)
 
             ok = self._run_motion_loop(goal_handle, OpenGripper.Feedback, target_ticks=target_ticks)
             if not ok:
@@ -385,9 +470,9 @@ class DynamixelGripperActionNode(Node):
 
         try:
             if use_torque_mode:
-                target_ticks = self._apply_torque(torque, close_position)
+                target_ticks = self._apply_torque(goal_handle, torque, close_position)
             else:
-                target_ticks = self._apply_position(close_position)
+                target_ticks = self._apply_position(goal_handle, close_position)
 
             ok = self._run_motion_loop(goal_handle, CloseGripper.Feedback, target_ticks=target_ticks)
             if not ok:
