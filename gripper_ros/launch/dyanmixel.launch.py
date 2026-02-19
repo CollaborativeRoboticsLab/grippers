@@ -1,7 +1,7 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -17,7 +17,7 @@ def generate_launch_description() -> LaunchDescription:
 		parameters=[params_file],
 	)
 
-	default_params = [FindPackageShare('gripper_ros'), 'config', 'dynamixel.yaml']
+	default_params = PathJoinSubstitution([FindPackageShare('gripper_ros'), 'config', 'dynamixel.yaml'])
 
 	return LaunchDescription(
 		[

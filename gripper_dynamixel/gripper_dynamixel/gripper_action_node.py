@@ -138,9 +138,15 @@ class DynamixelGripperActionNode(Node):
     def __init__(self) -> None:
         super().__init__('gripper_dynamixel_action_node')
 
+        # If true, fail fast when the Dynamixel transport/servo cannot be initialized.
+        # This prevents the node from advertising actions while not functional.
+        self.declare_parameter('shutdown_on_init_failure', True)
+
         # Optional motor configuration file loader.
         self.declare_parameter('motor_model', '')
         self.motor_model = str(self.get_parameter('motor_model').value)
+
+        self.get_logger().info(f"motor_model='{self.motor_model}'")
 
         # Defaults used when goals are default-constructed (e.g. ros2 cli with {}).
         self.declare_parameter(self.motor_model + '.close_default', True)
@@ -190,7 +196,9 @@ class DynamixelGripperActionNode(Node):
 
         self._dxl: Optional[DynamixelProtocol2Driver] = None
 
-        self._init_dynamixel()
+        ok = self._init_dynamixel()
+        if not ok and bool(self.get_parameter('shutdown_on_init_failure').value):
+            raise RuntimeError('Dynamixel initialization failed; shutting down due to shutdown_on_init_failure=true')
 
         self._open_server = ActionServer(
             self,
@@ -219,7 +227,7 @@ class DynamixelGripperActionNode(Node):
         self._close_server.destroy()
         return super().destroy_node()
 
-    def _init_dynamixel(self) -> None:
+    def _init_dynamixel(self) -> bool:
         try:
             self._dxl = DynamixelProtocol2Driver(
                 device_name=str(self.get_parameter(self.motor_model + '.device_name').value),
@@ -242,9 +250,11 @@ class DynamixelGripperActionNode(Node):
                 f'on {str(self.get_parameter(self.motor_model + ".device_name").value)} '
                 f'@ {int(self.get_parameter(self.motor_model + ".baudrate").value)}'
             )
+            return True
         except Exception as exc:  # noqa: BLE001
             self._dxl = None
             self.get_logger().error(f'Failed to initialize Dynamixel SDK driver: {exc}')
+            return False
 
     def _reinit_dynamixel(self) -> None:
         if self._dxl is not None:
@@ -293,8 +303,8 @@ class DynamixelGripperActionNode(Node):
                 raise RuntimeError(f'{op} canceled')
 
             if self._dxl is None:
-                self._init_dynamixel()
-                if self._dxl is None:
+                ok = self._init_dynamixel()
+                if not ok or self._dxl is None:
                     raise RuntimeError(f'{op} failed: Dynamixel driver is not initialized.')
 
             try:
@@ -488,11 +498,15 @@ class DynamixelGripperActionNode(Node):
 
 def main(args=None) -> None:
     rclpy.init(args=args)
-    node = DynamixelGripperActionNode()
+    node: Optional[DynamixelGripperActionNode] = None
     try:
+        node = DynamixelGripperActionNode()
         rclpy.spin(node)
+    except Exception as exc:  # noqa: BLE001
+        rclpy.logging.get_logger('gripper_dynamixel_action_node').fatal(str(exc))
     finally:
-        node.destroy_node()
+        if node is not None:
+            node.destroy_node()
         rclpy.shutdown()
 
 

@@ -38,7 +38,7 @@ gripper_dynamixel_action_node:
       close_default: true
 
     XL330:
-			# Transport
+      # Transport
       device_name: /dev/ttyUSB0
       baudrate: 57600
       dxl_id: 1
