@@ -29,23 +29,7 @@ from rclpy.node import Node
 from rclpy.parameter import Parameter
 
 from gripper_msgs.action import CloseGripper, OpenGripper
-
-try:
-    import yaml  # type: ignore
-except Exception:  # noqa: BLE001
-    yaml = None  # type: ignore[assignment]
-
-try:
-    from ament_index_python.packages import get_package_share_directory
-except Exception:  # noqa: BLE001
-    get_package_share_directory = None  # type: ignore[assignment]
-
-try:
-    from dynamixel_sdk import PacketHandler, PortHandler  # type: ignore
-except Exception:  # noqa: BLE001
-    PacketHandler = None  # type: ignore[assignment]
-    PortHandler = None  # type: ignore[assignment]
-
+from dynamixel_sdk import PacketHandler, PortHandler
 
 class DynamixelProtocol2Driver:
     def __init__(
@@ -154,54 +138,50 @@ class DynamixelGripperActionNode(Node):
         super().__init__('gripper_dynamixel_action_node')
 
         # Optional motor configuration file loader.
-        # - If `motor_config_path` is set, it is used directly.
-        # - Else if `motor_model` is set, loads `${share}/config/<motor_model>.yaml`.
         self.declare_parameter('motor_model', '')
-        self.declare_parameter('motor_config_path', '')
-
-        self.declare_parameter('open_position', 0.0)
-        self.declare_parameter('close_position', 1.0)
+        self.motor_model = str(self.get_parameter('motor_model').value)
 
         # Defaults used when goals are default-constructed (e.g. ros2 cli with {}).
-        self.declare_parameter('close_default', True)
-        self.declare_parameter('default_torque', 0.0)
+        self.declare_parameter(self.motor_model + '.close_default', True)
+        self.declare_parameter(self.motor_model + '.default_torque', 0.0)
 
         # If true, torque mode is used unless explicitly enabled in the goal.
-        self.declare_parameter('use_torque_mode', False)
+        self.declare_parameter(self.motor_model + '.use_torque_mode', False)
 
         # Dynamixel Protocol 2.0 transport
-        self.declare_parameter('device_name', '/dev/ttyUSB0')
-        self.declare_parameter('baudrate', 57600)
-        self.declare_parameter('dxl_id', 1)
+        self.declare_parameter(self.motor_model + '.device_name', '/dev/ttyUSB0')
+        self.declare_parameter(self.motor_model + '.baudrate', 57600)
+        self.declare_parameter(self.motor_model + '.dxl_id', 1)
 
         # Control table addresses (defaults are common for many Protocol 2.0 models; override per model if needed).
-        self.declare_parameter('addr_operating_mode', 11)
-        self.declare_parameter('addr_torque_enable', 64)
-        self.declare_parameter('addr_goal_current', 102)
-        self.declare_parameter('addr_goal_position', 116)
-        self.declare_parameter('addr_present_current', 126)
-        self.declare_parameter('addr_present_position', 132)
+        self.declare_parameter(self.motor_model + '.addr_operating_mode', 11)
+        self.declare_parameter(self.motor_model + '.addr_torque_enable', 64)
+        self.declare_parameter(self.motor_model + '.addr_goal_current', 102)
+        self.declare_parameter(self.motor_model + '.addr_goal_position', 116)
+        self.declare_parameter(self.motor_model + '.addr_present_current', 126)
+        self.declare_parameter(self.motor_model + '.addr_present_position', 132)
 
         # Operating mode values
-        self.declare_parameter('operating_mode_current', 0)
-        self.declare_parameter('operating_mode_position', 3)
-        self.declare_parameter('operating_mode_current_based_position', 5)
+        self.declare_parameter(self.motor_model + '.operating_mode_current', 0)
+        self.declare_parameter(self.motor_model + '.operating_mode_position', 3)
+        self.declare_parameter(self.motor_model + '.operating_mode_current_based_position', 5)
 
         # Position scaling
-        self.declare_parameter('position_is_radians', True)
-        self.declare_parameter('ticks_per_rev', 4096)
-        self.declare_parameter('gear_ratio', 1.0)
-        self.declare_parameter('direction', 1)
-        self.declare_parameter('zero_offset_ticks', 0)
+        self.declare_parameter(self.motor_model + '.position_is_radians', False)
+        self.declare_parameter(self.motor_model + '.open_position', 900.0)
+        self.declare_parameter(self.motor_model + '.close_position', 2000.0)
+        self.declare_parameter(self.motor_model + '.ticks_per_rev', 4096)
+        self.declare_parameter(self.motor_model + '.gear_ratio', 1.0)
+        self.declare_parameter(self.motor_model + '.direction', 1)
+        self.declare_parameter(self.motor_model + '.zero_offset_ticks', 0)
 
         # Motion loop settings
-        self.declare_parameter('goal_tolerance_ticks', 20)
-        self.declare_parameter('motion_timeout_sec', 3.0)
-        self.declare_parameter('poll_rate_hz', 30.0)
+        self.declare_parameter(self.motor_model + '.goal_tolerance_ticks', 20)
+        self.declare_parameter(self.motor_model + '.motion_timeout_sec', 3.0)
+        self.declare_parameter(self.motor_model + '.poll_rate_hz', 30.0)
 
         self._dxl: Optional[DynamixelProtocol2Driver] = None
 
-        self._load_motor_config_into_parameters()
         self._init_dynamixel()
 
         self._open_server = ActionServer(
@@ -234,107 +214,39 @@ class DynamixelGripperActionNode(Node):
     def _init_dynamixel(self) -> None:
         try:
             self._dxl = DynamixelProtocol2Driver(
-                device_name=str(self.get_parameter('device_name').value),
-                baudrate=int(self.get_parameter('baudrate').value),
-                dxl_id=int(self.get_parameter('dxl_id').value),
-                addr_operating_mode=int(self.get_parameter('addr_operating_mode').value),
-                addr_torque_enable=int(self.get_parameter('addr_torque_enable').value),
-                addr_goal_current=int(self.get_parameter('addr_goal_current').value),
-                addr_goal_position=int(self.get_parameter('addr_goal_position').value),
-                addr_present_current=int(self.get_parameter('addr_present_current').value),
-                addr_present_position=int(self.get_parameter('addr_present_position').value),
-                operating_mode_current=int(self.get_parameter('operating_mode_current').value),
-                operating_mode_position=int(self.get_parameter('operating_mode_position').value),
+                device_name=str(self.get_parameter(self.motor_model + '.device_name').value),
+                baudrate=int(self.get_parameter(self.motor_model + '.baudrate').value),
+                dxl_id=int(self.get_parameter(self.motor_model + '.dxl_id').value),
+                addr_operating_mode=int(self.get_parameter(self.motor_model + '.addr_operating_mode').value),
+                addr_torque_enable=int(self.get_parameter(self.motor_model + '.addr_torque_enable').value),
+                addr_goal_current=int(self.get_parameter(self.motor_model + '.addr_goal_current').value),
+                addr_goal_position=int(self.get_parameter(self.motor_model + '.addr_goal_position').value),
+                addr_present_current=int(self.get_parameter(self.motor_model + '.addr_present_current').value),
+                addr_present_position=int(self.get_parameter(self.motor_model + '.addr_present_position').value),
+                operating_mode_current=int(self.get_parameter(self.motor_model + '.operating_mode_current').value),
+                operating_mode_position=int(self.get_parameter(self.motor_model + '.operating_mode_position').value),
                 operating_mode_current_based_position=int(
-                    self.get_parameter('operating_mode_current_based_position').value
+                    self.get_parameter(self.motor_model + '.operating_mode_current_based_position').value
                 ),
             )
             self.get_logger().info(
-                f'Connected to Dynamixel id={int(self.get_parameter("dxl_id").value)} '
-                f'on {str(self.get_parameter("device_name").value)} '
-                f'@ {int(self.get_parameter("baudrate").value)}'
+                f'Connected to Dynamixel id={int(self.get_parameter(self.motor_model + ".dxl_id").value)} '
+                f'on {str(self.get_parameter(self.motor_model + ".device_name").value)} '
+                f'@ {int(self.get_parameter(self.motor_model + ".baudrate").value)}'
             )
         except Exception as exc:  # noqa: BLE001
             self._dxl = None
             self.get_logger().error(f'Failed to initialize Dynamixel SDK driver: {exc}')
 
-    def _load_motor_config_into_parameters(self) -> None:
-        config_path = str(self.get_parameter('motor_config_path').value)
-        motor_model = str(self.get_parameter('motor_model').value)
-
-        if not config_path and not motor_model:
-            return
-
-        if yaml is None:
-            self.get_logger().error('PyYAML is not available; cannot load motor config YAML.')
-            return
-
-        if not config_path and motor_model:
-            if get_package_share_directory is None:
-                self.get_logger().error('ament_index_python is not available; cannot locate packaged config files.')
-                return
-            share_dir = get_package_share_directory('gripper_dynamixel')
-            config_path = os.path.join(share_dir, 'config', f'{motor_model}.yaml')
-
-        if not os.path.exists(config_path):
-            self.get_logger().error(f'Motor config YAML not found: {config_path}')
-            return
-
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                data = yaml.safe_load(f) or {}
-        except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f'Failed to read motor config YAML {config_path}: {exc}')
-            return
-
-        # Support two common shapes:
-        # 1) {<node_name>: {ros__parameters: {...}}}
-        # 2) {ros__parameters: {...}}
-        params = None
-        if isinstance(data, dict) and 'ros__parameters' in data and isinstance(data['ros__parameters'], dict):
-            params = data['ros__parameters']
-        elif isinstance(data, dict) and self.get_name() in data:
-            node_block = data.get(self.get_name())
-            if isinstance(node_block, dict) and 'ros__parameters' in node_block and isinstance(
-                node_block['ros__parameters'], dict
-            ):
-                params = node_block['ros__parameters']
-
-        if params is None:
-            self.get_logger().error(
-                f'Unsupported YAML format in {config_path}. Expected ros__parameters block.'
-            )
-            return
-
-        # Never overwrite the config selection params from the YAML.
-        params.pop('motor_model', None)
-        params.pop('motor_config_path', None)
-
-        to_set = []
-        for key, value in params.items():
-            try:
-                to_set.append(Parameter(str(key), value=value))
-            except Exception as exc:  # noqa: BLE001
-                self.get_logger().warn(f'Skipping param {key} from YAML (bad value {value!r}): {exc}')
-
-        if not to_set:
-            return
-
-        results = self.set_parameters(to_set)
-        for param, result in zip(to_set, results):
-            if not result.successful:
-                self.get_logger().warn(f'Failed to set param {param.name} from YAML: {result.reason}')
-        self.get_logger().info(f'Loaded motor config from {config_path}')
-
     def _position_to_ticks(self, position_value: float) -> int:
-        if not bool(self.get_parameter('position_is_radians').value):
+        if not bool(self.get_parameter(self.motor_model + '.position_is_radians').value):
             # Treat the parameter directly as ticks.
             return int(round(position_value))
 
-        ticks_per_rev = float(self.get_parameter('ticks_per_rev').value)
-        gear_ratio = float(self.get_parameter('gear_ratio').value)
-        direction = int(self.get_parameter('direction').value)
-        zero = int(self.get_parameter('zero_offset_ticks').value)
+        ticks_per_rev = float(self.get_parameter(self.motor_model + '.ticks_per_rev').value)
+        gear_ratio = float(self.get_parameter(self.motor_model + '.gear_ratio').value)
+        direction = int(self.get_parameter(self.motor_model + '.direction').value)
+        zero = int(self.get_parameter(self.motor_model + '.zero_offset_ticks').value)
 
         ticks_per_rad = ticks_per_rev * gear_ratio / (2.0 * math.pi)
         return int(round(zero + direction * (position_value * ticks_per_rad)))
@@ -348,11 +260,11 @@ class DynamixelGripperActionNode(Node):
     def _resolve_torque(self, requested_torque: float) -> float:
         if abs(requested_torque) > 0.0:
             return float(requested_torque)
-        return float(self.get_parameter('default_torque').value)
+        return float(self.get_parameter(self.motor_model + '.default_torque').value)
 
     def _resolve_use_torque_mode(self, goal_flag: bool) -> bool:
         # Treat goal_flag as an explicit enable. If false, fall back to parameter default.
-        return bool(goal_flag) or bool(self.get_parameter('use_torque_mode').value)
+        return bool(goal_flag) or bool(self.get_parameter(self.motor_model + '.use_torque_mode').value)
 
     def _apply_position(self, target_position: float) -> int:
         if self._dxl is None:
@@ -388,11 +300,11 @@ class DynamixelGripperActionNode(Node):
         return target_ticks
 
     def _run_motion_loop(self, goal_handle, feedback_cls, *, target_ticks: Optional[int]) -> bool:
-        timeout = float(self.get_parameter('motion_timeout_sec').value)
-        poll_rate = float(self.get_parameter('poll_rate_hz').value)
+        timeout = float(self.get_parameter(self.motor_model + '.motion_timeout_sec').value)
+        poll_rate = float(self.get_parameter(self.motor_model + '.poll_rate_hz').value)
         poll_rate = 1.0 if poll_rate <= 0.0 else poll_rate
         sleep_sec = 1.0 / poll_rate
-        tolerance = int(self.get_parameter('goal_tolerance_ticks').value)
+        tolerance = int(self.get_parameter(self.motor_model + '.goal_tolerance_ticks').value)
 
         start_time = time.monotonic()
         start_pos: Optional[int] = None
@@ -436,7 +348,7 @@ class DynamixelGripperActionNode(Node):
     def _execute_open(self, goal_handle) -> OpenGripper.Result:
         goal = goal_handle.request
 
-        open_position = float(self.get_parameter('open_position').value)
+        open_position = float(self.get_parameter(self.motor_model + '.open_position').value)
         torque = self._resolve_torque(float(goal.torque))
         use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
 
@@ -460,10 +372,10 @@ class DynamixelGripperActionNode(Node):
     def _execute_close(self, goal_handle) -> CloseGripper.Result:
         goal = goal_handle.request
 
-        close_default = bool(self.get_parameter('close_default').value)
+        close_default = bool(self.get_parameter(self.motor_model + '.close_default').value)
         close_requested = bool(goal.close) or close_default
 
-        close_position = float(self.get_parameter('close_position').value)
+        close_position = float(self.get_parameter(self.motor_model + '.close_position').value)
         torque = self._resolve_torque(float(goal.torque))
         use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
 

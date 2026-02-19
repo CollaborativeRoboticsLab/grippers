@@ -3,18 +3,108 @@ gripper_dynamixel_action_node:
   ros__parameters:
     # Select which model preset to load from gripper_dynamixel/share/gripper_dynamixel/config/<model>.yaml
     # Valid examples: XL330, XM430, W350
-    motor_model: XL330
+    motor_model: XM430
 
-    # Transport
-    device_name: /dev/ttyUSB0
-    baudrate: 57600
-    dxl_id: 1
+    XM430:
+      device_name: /dev/ttyUSB0
+      baudrate: 57600
+      dxl_id: 1
+  
+      addr_operating_mode: 11
+      addr_torque_enable: 64
+      addr_goal_current: 102
+      addr_goal_position: 116
+      addr_present_current: 126
+      addr_present_position: 132
+  
+      operating_mode_current: 0
+      operating_mode_position: 3
+      operating_mode_current_based_position: 5
+  
+      position_is_radians: false
+      ticks_per_rev: 4096
+      gear_ratio: 1.0
+      direction: 1
+      zero_offset_ticks: 0
+      open_position: 900.0
+      close_position: 2000.0
+  
+      goal_tolerance_ticks: 20
+      motion_timeout_sec: 3.0
+      poll_rate_hz: 30.0
+  
+      use_torque_mode: false
+      default_torque: 0.0
+      close_default: true
 
-    # Gripper targets (radians by default; see model YAML / node params)
-    open_position: 0.0
-    close_position: 1.0
+    XL330:
+			# Transport
+      device_name: /dev/ttyUSB0
+      baudrate: 57600
+      dxl_id: 1
 
-    # Optional behavior
-    use_torque_mode: false
-    default_torque: 0.0
-    close_default: true
+      # Protocol 2.0 control table (common X-series layout; adjust if your exact model differs)
+      addr_operating_mode: 11
+      addr_torque_enable: 64
+      addr_goal_current: 102
+      addr_goal_position: 116
+      addr_present_current: 126
+      addr_present_position: 132
+
+      operating_mode_current: 0
+      operating_mode_position: 3
+      operating_mode_current_based_position: 5
+
+      # Position scaling
+      position_is_radians: true
+      ticks_per_rev: 4096
+      gear_ratio: 1.0
+      direction: 1
+      zero_offset_ticks: 0
+
+      # Gripper targets (set these for your mechanism)
+      open_position: 0.0
+      close_position: 1.0
+
+      # Motion behavior
+      goal_tolerance_ticks: 20
+      motion_timeout_sec: 3.0
+      poll_rate_hz: 30.0
+
+      # Torque-mode defaults
+      use_torque_mode: false
+      default_torque: 0.0
+      close_default: true
+
+    W350:
+      device_name: /dev/ttyUSB0
+      baudrate: 57600
+      dxl_id: 1
+
+      addr_operating_mode: 11
+      addr_torque_enable: 64
+      addr_goal_current: 102
+      addr_goal_position: 116
+      addr_present_current: 126
+      addr_present_position: 132
+  
+      operating_mode_current: 0
+      operating_mode_position: 3
+      operating_mode_current_based_position: 5
+  
+      position_is_radians: true
+      ticks_per_rev: 4096
+      gear_ratio: 1.0
+      direction: 1
+      zero_offset_ticks: 0
+  
+      open_position: 0.0
+      close_position: 1.0
+  
+      goal_tolerance_ticks: 20
+      motion_timeout_sec: 3.0
+      poll_rate_hz: 30.0
+  
+      use_torque_mode: false
+      default_torque: 0.0
+      close_default: true

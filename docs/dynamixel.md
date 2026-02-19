@@ -78,12 +78,14 @@ Edit `gripper_ros/config/dynamixel.yaml`:
 Launch via `gripper_ros`:
 
 ```bash
+source install/setup.bash
 ros2 launch gripper_ros dyanmixel.launch.py
 ```
 
 Override the params file if needed:
 
 ```bash
+source install/setup.bash
 ros2 launch gripper_ros dyanmixel.launch.py params_file:=/abs/path/to/dynamixel.yaml
 ```
 

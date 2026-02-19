@@ -47,12 +47,14 @@ Feedback:
 Discover actions:
 
 ```bash
+source install/setup.bash
 ros2 action list
 ```
 
 Inspect the interface:
 
 ```bash
+source install/setup.bash
 ros2 interface show gripper_msgs/action/OpenGripper
 ros2 interface show gripper_msgs/action/CloseGripper
 ```
@@ -60,18 +62,21 @@ ros2 interface show gripper_msgs/action/CloseGripper
 Send an open goal:
 
 ```bash
+source install/setup.bash
 ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
 ```
 
 Send a close goal:
 
 ```bash
+source install/setup.bash
 ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
 ```
 
 Close with torque/current limiting (if supported by the active driver):
 
 ```bash
+source install/setup.bash
 ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 80.0, use_torque_mode: true}"
 ```
 
