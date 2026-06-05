@@ -7,15 +7,15 @@
       <origin xyz="${xyz}" rpy="${rpy}" />
     </joint>
     <link name="${prefix}gripper_base">
-            <inertial>
+        <inertial>
             <mass value="9.60074e-05" />
             <origin xyz="0.00989949 0.0275 0.013491" rpy="0 -0 0" />
             <inertia ixx="4.52785e-08" ixy="0" ixz="0" iyy="1.33505e-07" iyz="0" izz="1.57011e-07" />
         </inertial>
-            <visual>
+        <visual>
             <origin xyz="-0.0701005 0.0525 0.0273995" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Base.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Base.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -31,7 +31,7 @@
         <visual>
             <origin xyz="-0.005 0.003 0.0075" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Block.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Block.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -47,7 +47,7 @@
         <visual>
             <origin xyz="0.005 0.003 0.0075" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Block.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Block.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -63,7 +63,7 @@
         <visual>
             <origin xyz="-0.005 0.003 -0.0075" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Block.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Block.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -79,7 +79,7 @@
         <visual>
             <origin xyz="0.005 0.003 -0.0075" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Block.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Block.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -95,7 +95,7 @@
         <visual>
             <origin xyz="-0.0275 -3.46945e-18 0.005" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Clamp.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Clamp.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -105,13 +105,13 @@
     <link name="${prefix}gripper_dynamixel_xm430_w350_r">
         <inertial>
             <mass value="4.41073e-05" />
-            <origin xyz="-0.0166389 -0.00539576 -0.0143" rpy="0 -0 0" />
+            <origin xyz="-0.0236389 0.000604241 8.56606e-14" rpy="0 -0 0" />
             <inertia ixx="7.26484e-09" ixy="1.25677e-10" ixz="0" iyy="1.08932e-08" iyz="0" izz="1.24382e-08" />
         </inertial>
         <visual>
-            <origin xyz="-0.0396 0.011 -0.0286" rpy="0 -0 0" />
+            <origin xyz="-0.0466 0.017 -0.0143" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/dynamixel_XM430_W350_R.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/dynamixel_XM430_W350_R.stl" scale="1 1 1" />
             </geometry>
             <material name="0.501961_0.501961_0.501961_0.000000_0.000000">
                 <color rgba="0.501961 0.501961 0.501961 1" />
@@ -127,7 +127,7 @@
         <visual>
             <origin xyz="-0.006 -0.0152 0.0847" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Gipper_case.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Gipper_case.stl" scale="1 1 1" />
             </geometry>
             <material name="1.000000_1.000000_1.000000_0.000000_0.000000">
                 <color rgba="1 1 1 1" />
@@ -143,7 +143,7 @@
         <visual>
             <origin xyz="-0.006 -0.0152 0.0847" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Gipper_case.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Gipper_case.stl" scale="1 1 1" />
             </geometry>
             <material name="1.000000_1.000000_1.000000_0.000000_0.000000">
                 <color rgba="1 1 1 1" />
@@ -153,13 +153,13 @@
     <link name="${prefix}gripper_gripper_support">
         <inertial>
             <mass value="1.89595e-05" />
-            <origin xyz="-0.00581655 -0.0152972 0.013" rpy="0 -0 0" />
+            <origin xyz="-0.00969672 -0.00829719 0.004" rpy="0 -0 0" />
             <inertia ixx="3.98339e-09" ixy="2.93394e-10" ixz="0" iyy="3.42247e-09" iyz="1.43098e-15" izz="2.29475e-09" />
         </inertial>
         <visual>
-            <origin xyz="-0.0216198 -0.007 -0.0155" rpy="0 -0 0" />
+            <origin xyz="-0.0255 0 -0.0245" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Gripper_support.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Gripper_support.stl" scale="1 1 1" />
             </geometry>
             <material name="1.000000_0.501961_0.501961_0.000000_0.000000">
                 <color rgba="1 0.501961 0.501961 1" />
@@ -173,9 +173,9 @@
             <inertia ixx="3.98339e-09" ixy="2.93394e-10" ixz="0" iyy="3.42247e-09" iyz="1.43098e-15" izz="2.29475e-09" />
         </inertial>
         <visual>
-            <origin xyz="-0.0135 -0.00588499 -0.0155" rpy="0 -0 0" />
+            <origin xyz="-0.0135 -0.00588499 -0.0185" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Gripper_support.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Gripper_support.stl" scale="1 1 1" />
             </geometry>
             <material name="1.000000_0.501961_0.501961_0.000000_0.000000">
                 <color rgba="1 0.501961 0.501961 1" />
@@ -191,7 +191,7 @@
         <visual>
             <origin xyz="-0.035 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Link.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Link.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -207,7 +207,7 @@
         <visual>
             <origin xyz="-0.035 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Link.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Link.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -237,7 +237,7 @@
         <visual>
             <origin xyz="-0.0075 0 0.0045" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/MGNR09R315HM.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/MGNR09R315HM.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.796078_0.796078_0.000000_0.000000">
                 <color rgba="0.796078 0.796078 0.796078 1" />
@@ -253,17 +253,21 @@
         <visual>
             <origin xyz="-0.0075 0 0.0045" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/MGNR09R315HM.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/MGNR09R315HM.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.796078_0.796078_0.000000_0.000000">
                 <color rgba="0.796078 0.796078 0.796078 1" />
             </material>
         </visual>
     </link>
+    <link name="${prefix}gripper_planar_1" />
+    <link name="${prefix}gripper_planar_1_1" />
     <link name="${prefix}gripper_planar_4" />
     <link name="${prefix}gripper_planar_4_1" />
-    <link name="${prefix}gripper_planar_5" />
-    <link name="${prefix}gripper_planar_5_1" />
+    <link name="${prefix}gripper_planar_7" />
+    <link name="${prefix}gripper_planar_7_1" />
+    <link name="${prefix}gripper_planar_8" />
+    <link name="${prefix}gripper_planar_8_1" />
     <link name="${prefix}gripper_root" />
     <link name="${prefix}gripper_small_motor_mount">
         <inertial>
@@ -274,7 +278,7 @@
         <visual>
             <origin xyz="0 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Small_motor_mount.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Small_motor_mount.stl" scale="1 1 1" />
             </geometry>
             <material name="0.796078_0.823529_0.937255_0.000000_0.000000">
                 <color rgba="0.796078 0.823529 0.937255 1" />
@@ -284,48 +288,16 @@
     <link name="${prefix}gripper_small_motor_test_2_base">
         <inertial>
             <mass value="4.70869e-05" />
-            <origin xyz="-0.076 -0.023021 0.021" rpy="0 -0 0" />
+            <origin xyz="-0.08 -0.00352096 -5.05776e-14" rpy="0 -0 0" />
             <inertia ixx="1.97752e-08" ixy="0" ixz="0" iyy="1.84606e-07" iyz="0" izz="1.73024e-07" />
         </inertial>
         <visual>
-            <origin xyz="-0.156 -0.026 -0.004" rpy="0 -0 0" />
+            <origin xyz="-0.16 -0.0065 -0.025" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/Small_Motor_test_2_Base.stl" scale="1 1 1" />
+                <mesh filename="package://gripper_description/meshes/Small_Motor_test_2_Base.stl" scale="1 1 1" />
             </geometry>
             <material name="0.000000_0.752941_0.752941_0.000000_0.000000">
                 <color rgba="0 0.752941 0.752941 1" />
-            </material>
-        </visual>
-    </link>
-    <link name="${prefix}gripper_soft_gripper_finger">
-        <inertial>
-            <mass value="4.70738e-05" />
-            <origin xyz="-0.0173609 0.0381915 -0.0129" rpy="0 -0 0" />
-            <inertia ixx="5.05765e-08" ixy="5.83018e-09" ixz="0" iyy="9.02641e-09" iyz="0" izz="5.43806e-08" />
-        </inertial>
-        <visual>
-            <origin xyz="-0.035 -0.005 0" rpy="0 -0 0" />
-            <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/soft_gripper_finger.stl" scale="1 1 1" />
-            </geometry>
-            <material name="0.231373_0.380392_0.705882_0.000000_0.000000">
-                <color rgba="0.231373 0.380392 0.705882 1" />
-            </material>
-        </visual>
-    </link>
-    <link name="${prefix}gripper_soft_gripper_finger_1">
-        <inertial>
-            <mass value="4.70738e-05" />
-            <origin xyz="-0.0173609 0.0381915 -0.0129" rpy="0 -0 0" />
-            <inertia ixx="5.05765e-08" ixy="5.83018e-09" ixz="0" iyy="9.02641e-09" iyz="0" izz="5.43806e-08" />
-        </inertial>
-        <visual>
-            <origin xyz="-0.035 -0.005 0" rpy="0 -0 0" />
-            <geometry>
-                <mesh filename="package://gripper_description/meshes/soft-two-finger-gripper/soft_gripper_finger.stl" scale="1 1 1" />
-            </geometry>
-            <material name="0.231373_0.380392_0.705882_0.000000_0.000000">
-                <color rgba="0.231373 0.380392 0.705882 1" />
             </material>
         </visual>
     </link>
@@ -336,149 +308,165 @@
         <child link="${prefix}gripper_clamp" />
     </joint>
     <joint name="${prefix}gripper_fastened_10" type="fixed">
-        <origin xyz="0.0085 -0.018885 0.0282" rpy="1.5708 -8.04912e-16 3.14159" />
+        <origin xyz="0.0085 -0.018885 0.0252" rpy="1.5708 -7.77156e-16 3.14159" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_gripper_support_1" />
         <child link="${prefix}gripper_gipper_case_1" />
     </joint>
-    <joint name="${prefix}gripper_fastened_11" type="fixed">
-        <origin xyz="0.0858995 0.0065 0.0273995" rpy="-1.5708 -3.37038e-32 -1.3886e-31" />
-        <axis xyz="0 -1 0" />
-        <parent link="${prefix}gripper_base" />
-        <child link="${prefix}gripper_small_motor_test_2_base" />
-    </joint>
-    <joint name="${prefix}gripper_fastened_12" type="fixed">
-        <origin xyz="-0.0182005 0.04185 0.0213995" rpy="1.5708 -3.38813e-21 3.14159" />
-        <axis xyz="0 0 1" />
-        <parent link="${prefix}gripper_base" />
-        <child link="${prefix}gripper_dynamixel_xm430_w350_r" />
-    </joint>
-    <joint name="${prefix}gripper_fastened_13" type="fixed">
-        <origin xyz="0.0289911 -0.0021 -0.0217317" rpy="-1.5708 2.46733e-30 -3.29899e-29" />
-        <axis xyz="0 0 -1" />
-        <parent link="${prefix}gripper_gipper_case_1" />
-        <child link="${prefix}gripper_soft_gripper_finger" />
-    </joint>
-    <joint name="${prefix}gripper_fastened_14" type="fixed">
-        <origin xyz="0.0289911 -0.0021 -0.0217317" rpy="-1.5708 -7.02888e-17 -7.02888e-17" />
-        <axis xyz="0 0 1" />
-        <parent link="${prefix}gripper_gipper_case" />
-        <child link="${prefix}gripper_soft_gripper_finger_1" />
-    </joint>
     <joint name="${prefix}gripper_fastened_2" type="fixed">
-        <origin xyz="0.0275 -0.00989949 0.027421" rpy="-1.44607e-16 -2.00374e-16 1.5708" />
+        <origin xyz="0.0275 -0.00989949 0.027421" rpy="1.47155e-31 3.71911e-31 1.5708" />
         <axis xyz="1.73472e-16 -1 -2.00618e-32" />
         <parent link="${prefix}gripper_clamp" />
         <child link="${prefix}gripper_base" />
     </joint>
     <joint name="${prefix}gripper_fastened_3" type="fixed">
-        <origin xyz="-0.0131198 -0.007 -0.0121" rpy="4.74207e-19 -1.38778e-16 -4.80745e-31" />
+        <origin xyz="-0.017 0 -0.0211" rpy="6.97759e-19 -6.93889e-18 -4.27546e-31" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_gripper_support" />
         <child link="${prefix}gripper_block_1" />
     </joint>
     <joint name="${prefix}gripper_fastened_4" type="fixed">
-        <origin xyz="-0.0131198 -0.007 0.0381" rpy="6.13299e-17 -2.498e-16 -5.19187e-31" />
+        <origin xyz="-0.017 0 0.0291" rpy="6.97759e-19 -6.93889e-18 -4.27546e-31" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_gripper_support" />
         <child link="${prefix}gripper_block_3" />
     </joint>
     <joint name="${prefix}gripper_fastened_5" type="fixed">
-        <origin xyz="-0.005 -0.00588499 -0.0121" rpy="3.14159 -1.38778e-16 -3.14159" />
+        <origin xyz="-0.005 -0.00588499 -0.0151" rpy="3.14159 -1.249e-16 -3.14159" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_gripper_support_1" />
         <child link="${prefix}gripper_block_2" />
     </joint>
     <joint name="${prefix}gripper_fastened_6" type="fixed">
-        <origin xyz="-0.146 -0.031 0.0035" rpy="-8.29972e-17 2.77556e-17 2.75156e-17" />
+        <origin xyz="-0.15 -0.0115 -0.0175" rpy="1.7185e-16 3.46945e-17 2.78835e-17" />
         <axis xyz="0 1 0" />
         <parent link="${prefix}gripper_small_motor_test_2_base" />
         <child link="${prefix}gripper_mgnr09r315hm_1" />
     </joint>
     <joint name="${prefix}gripper_fastened_7" type="fixed">
-        <origin xyz="-0.146 -0.031 0.0385" rpy="-1.50861e-16 -2.498e-16 -1.44023e-16" />
+        <origin xyz="-0.15 -0.0115 0.0175" rpy="1.7185e-16 3.46945e-17 2.78835e-17" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_small_motor_test_2_base" />
         <child link="${prefix}gripper_mgnr09r315hm" />
     </joint>
     <joint name="${prefix}gripper_fastened_8" type="fixed">
-        <origin xyz="-0.005 -0.00588499 0.0381" rpy="3.14159 8.32667e-17 3.14159" />
+        <origin xyz="-0.005 -0.00588499 0.0351" rpy="3.14159 1.52656e-16 3.14159" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_gripper_support_1" />
         <child link="${prefix}gripper_block" />
     </joint>
     <joint name="${prefix}gripper_fastened_9" type="fixed">
-        <origin xyz="0.000380163 -0.02 0.0282" rpy="1.5708 -7.21645e-16 -3.14159" />
+        <origin xyz="-0.0035 -0.013 0.0192" rpy="1.5708 -7.77156e-16 3.14159" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_gripper_support" />
         <child link="${prefix}gripper_gipper_case" />
     </joint>
+    <joint name="${prefix}gripper_planar_1" type="prismatic">
+        <origin xyz="-0.0252005 0.02755 0.0153995" rpy="1.5708 6.84228e-49 -3.14159" />
+        <axis xyz="0 1 0" />
+        <parent link="${prefix}gripper_base" />
+        <child link="${prefix}gripper_planar_1_1" />
+        <limit effort="1" velocity="1" lower="-10000" upper="10000" />
+    </joint>
+    <joint name="${prefix}gripper_planar_1_1" type="prismatic">
+        <origin xyz="0 0 0" rpy="0 -0 0" />
+        <axis xyz="-2.42619e-16 0 1" />
+        <parent link="${prefix}gripper_planar_1_1" />
+        <child link="${prefix}gripper_planar_1" />
+        <limit effort="1" velocity="1" lower="-10000" upper="10000" />
+    </joint>
+    <joint name="${prefix}gripper_planar_1_2" type="continuous">
+        <origin xyz="0 0 0" rpy="0 -0 0" />
+        <axis xyz="1 0 2.42619e-16" />
+        <parent link="${prefix}gripper_planar_1" />
+        <child link="${prefix}gripper_dynamixel_xm430_w350_r" />
+    </joint>
     <joint name="${prefix}gripper_planar_4" type="prismatic">
-        <origin xyz="0.129112 -0.00361501 -0.0045" rpy="-3.14159 -2.77556e-17 -3.14159" />
-        <axis xyz="-1 0 0" />
-        <parent link="${prefix}gripper_mgnr09r315hm" />
+        <origin xyz="0.0898995 0.0275 0.0468995" rpy="-1.5708 -2.78835e-17 6.81096e-18" />
+        <axis xyz="0 1 0" />
+        <parent link="${prefix}gripper_base" />
         <child link="${prefix}gripper_planar_4_1" />
         <limit effort="1" velocity="1" lower="-10000" upper="10000" />
     </joint>
     <joint name="${prefix}gripper_planar_4_1" type="prismatic">
         <origin xyz="0 0 0" rpy="0 -0 0" />
-        <axis xyz="0 -1 0" />
+        <axis xyz="0 0 1" />
         <parent link="${prefix}gripper_planar_4_1" />
         <child link="${prefix}gripper_planar_4" />
         <limit effort="1" velocity="1" lower="-10000" upper="10000" />
     </joint>
     <joint name="${prefix}gripper_planar_4_2" type="continuous">
         <origin xyz="0 0 0" rpy="0 -0 0" />
-        <axis xyz="0 0 1" />
-        <parent link="${prefix}gripper_planar_4" />
-        <child link="${prefix}gripper_gripper_support_1" />
-    </joint>
-    <joint name="${prefix}gripper_planar_5" type="prismatic">
-        <origin xyz="0.0189804 -0.0025 0.0045" rpy="1.91119e-16 -5.55112e-17 -7.01768e-17" />
         <axis xyz="1 0 0" />
-        <parent link="${prefix}gripper_mgnr09r315hm_1" />
-        <child link="${prefix}gripper_planar_5_1" />
+        <parent link="${prefix}gripper_planar_4" />
+        <child link="${prefix}gripper_small_motor_test_2_base" />
+    </joint>
+    <joint name="${prefix}gripper_planar_7" type="prismatic">
+        <origin xyz="-0.119454 -0.023 -0.004" rpy="1.7249e-16 3.46945e-17 2.78835e-17" />
+        <axis xyz="1 0 0" />
+        <parent link="${prefix}gripper_small_motor_test_2_base" />
+        <child link="${prefix}gripper_planar_7_1" />
         <limit effort="1" velocity="1" lower="-10000" upper="10000" />
     </joint>
-    <joint name="${prefix}gripper_planar_5_1" type="prismatic">
+    <joint name="${prefix}gripper_planar_7_1" type="prismatic">
         <origin xyz="0 0 0" rpy="0 -0 0" />
-        <axis xyz="0 1 0" />
-        <parent link="${prefix}gripper_planar_5_1" />
-        <child link="${prefix}gripper_planar_5" />
+        <axis xyz="0 -1 0" />
+        <parent link="${prefix}gripper_planar_7_1" />
+        <child link="${prefix}gripper_planar_7" />
         <limit effort="1" velocity="1" lower="-10000" upper="10000" />
     </joint>
-    <joint name="${prefix}gripper_planar_5_2" type="continuous">
+    <joint name="${prefix}gripper_planar_7_2" type="continuous">
         <origin xyz="0 0 0" rpy="0 -0 0" />
-        <axis xyz="0 0 1" />
-        <parent link="${prefix}gripper_planar_5" />
+        <axis xyz="0 0 -1" />
+        <parent link="${prefix}gripper_planar_7" />
         <child link="${prefix}gripper_gripper_support" />
     </joint>
+    <joint name="${prefix}gripper_planar_8" type="prismatic">
+        <origin xyz="-0.0286016 -0.017115 0.01" rpy="3.14159 -1.11022e-16 -3.14159" />
+        <axis xyz="-1 0 0" />
+        <parent link="${prefix}gripper_small_motor_test_2_base" />
+        <child link="${prefix}gripper_planar_8_1" />
+        <limit effort="1" velocity="1" lower="-10000" upper="10000" />
+    </joint>
+    <joint name="${prefix}gripper_planar_8_1" type="prismatic">
+        <origin xyz="0 0 0" rpy="0 -0 0" />
+        <axis xyz="0 -1 0" />
+        <parent link="${prefix}gripper_planar_8_1" />
+        <child link="${prefix}gripper_planar_8" />
+        <limit effort="1" velocity="1" lower="-10000" upper="10000" />
+    </joint>
+    <joint name="${prefix}gripper_planar_8_2" type="continuous">
+        <origin xyz="0 0 0" rpy="0 -0 0" />
+        <axis xyz="0 0 1" />
+        <parent link="${prefix}gripper_planar_8" />
+        <child link="${prefix}gripper_gripper_support_1" />
+    </joint>
     <joint name="${prefix}gripper_revolute_1" type="continuous">
-        <origin xyz="-0.0281 0.0135 -0.0143" rpy="-2.02118e-16 -0.349418 3.14159" />
+        <origin xyz="-0.0351 0.0215 4.9613e-15" rpy="1.19985e-18 -0.686084 -3.14159" />
         <axis xyz="0 1 0" />
         <parent link="${prefix}gripper_dynamixel_xm430_w350_r" />
         <child link="${prefix}gripper_small_motor_mount" />
     </joint>
     <joint name="${prefix}gripper_revolute_2" type="continuous">
-        <origin xyz="0.027 -0.009 8.42967e-18" rpy="3.14159 -0.618169 -3.14159" />
+        <origin xyz="0.027 -0.009 -1.24252e-15" rpy="-3.14159 -1.19833 3.14159" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_small_motor_mount" />
         <child link="${prefix}gripper_link_1" />
     </joint>
     <joint name="${prefix}gripper_revolute_3" type="continuous">
-        <origin xyz="-0.027 -0.009 -1.93259e-17" rpy="7.33602e-17 0.615207 2.98888e-16" />
+        <origin xyz="-0.027 -0.009 -3.92346e-18" rpy="3.06303e-17 1.19506 1.60187e-17" />
         <axis xyz="0 -1 0" />
         <parent link="${prefix}gripper_small_motor_mount" />
         <child link="${prefix}gripper_link" />
     </joint>
     <joint name="${prefix}gripper_revolute_5_loop_closure" type="continuous">
-        <origin xyz="2.77556e-17 0.00811501 0.013" rpy="-7.62939e-16 0.268751 -2.48014e-16" />
+        <origin xyz="1.38778e-17 0.00811501 0.01" rpy="-2.06338e-16 0.512248 4.14204e-18" />
         <axis xyz="0 1 0" />
         <parent link="${prefix}gripper_gripper_support_1" />
         <child link="${prefix}gripper_link__1__loop_closure" />
     </joint>
     <joint name="${prefix}gripper_revolute_6_loop_closure" type="continuous">
-        <origin xyz="-0.00811984 0.007 0.013" rpy="-2.37866e-16 0.265789 4.03328e-17" />
+        <origin xyz="-0.012 0.014 0.004" rpy="3.62667e-18 0.508973 1.04677e-17" />
         <axis xyz="0 1 0" />
         <parent link="${prefix}gripper_gripper_support" />
         <child link="${prefix}gripper_link__2__loop_closure" />
