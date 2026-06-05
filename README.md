@@ -7,7 +7,7 @@ ROS 2 gripper drivers that expose a **common action-based API** for opening/clos
 - `gripper_msgs`: ROS 2 action definitions (`OpenGripper`, `CloseGripper`).
 - `gripper_dynamixel`: DynamixelSDK (Protocol 2.0) based action server (Python).
 - `gripper_feetech`: Feetech STS/SCS based action server (C++).
-- `gripper_ros`: launch files + centralized parameter YAMLs.
+- `gripper_ros`: launch files + centralized motor/gripper parameter YAMLs.
 
 ## Action API
 
@@ -68,28 +68,43 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-## Running
+## Testing Motors
 
 ### Dynamixel
 
-- Config: `gripper_ros/config/dynamixel.yaml`
-- Launch:
+- Motor config: `gripper_ros/config/motors/dynamixel.yaml`
+- Gripper config example: `gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`
+- Motor-only launch:
 
 ```bash
 ros2 launch gripper_ros dyanmixel.launch.py
 ```
 
-Override params file:
+Override motor params file:
 
 ```bash
 ros2 launch gripper_ros dyanmixel.launch.py params_file:=/abs/path/to/dynamixel.yaml
+```
+
+- Gripper-level launch:
+
+```bash
+ros2 launch gripper_ros gripper_soft_two_finger.launch.py
+```
+
+Override both parameter layers:
+
+```bash
+ros2 launch gripper_ros gripper_soft_two_finger.launch.py \
+	motor_params_file:=/abs/path/to/dynamixel.yaml \
+	gripper_params_file:=/abs/path/to/soft_two_finger_dynamixel.yaml
 ```
 
 See [docs/dynamixel.md](docs/dynamixel.md) for motor model presets and parameter details.
 
 ### Feetech (STS/SCS)
 
-- Config: `gripper_ros/config/feetech.yaml`
+- Motor config: `gripper_ros/config/motors/feetech.yaml`
 - Launch:
 
 ```bash
@@ -104,8 +119,11 @@ ros2 launch gripper_ros feetech.launch.py params_file:=/abs/path/to/feetech.yaml
 
 See [docs/feetech.md](docs/feetech.md) for parameter details.
 
-## Docs
 
-- [docs/action_interface.md](docs/action_interface.md)
-- [docs/dynamixel.md](docs/dynamixel.md)
-- [docs/feetech.md](docs/feetech.md)
+## Running grippers
+
+## Adding new grippers
+
+- [Adding new grippers, descriptions, configs, and launch files](./docs/adding_new_grippers.md)
+- [Motor-specific configuration details for Dynamixel](./docs/dynamixel.md)
+- [Motor-specific configuration details for Feetech](./docs/feetech.md)

@@ -4,13 +4,17 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+
+#include <sensor_msgs/msg/joint_state.hpp>
 
 #include <gripper_msgs/action/open_gripper.hpp>
 #include <gripper_msgs/action/close_gripper.hpp>
@@ -55,6 +59,19 @@ public:
 		this->declare_parameter<int>("torque_limit_register", static_cast<int>(STSRegisters::TORQUE_LIMIT));
 		this->declare_parameter<bool>("close_default", true);
 
+		// Optional gripper-level joint-state publication. This bridges the articulated
+		// mechanism into robot_state_publisher without hard-coding a specific linkage.
+		this->declare_parameter<bool>("publish_gripper_joint_states", false);
+		this->declare_parameter<std::string>("gripper_joint_state_topic", "joint_states");
+		this->declare_parameter<std::string>("gripper_joint_name_prefix", "");
+		this->declare_parameter<std::vector<std::string>>("gripper_joint_state_names", std::vector<std::string>{});
+		this->declare_parameter<std::vector<double>>("gripper_joint_state_multipliers", std::vector<double>{});
+		this->declare_parameter<std::vector<double>>("gripper_joint_state_offsets", std::vector<double>{});
+		this->declare_parameter<double>("gripper_joint_state_rate_hz", 10.0);
+
+		joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
+			this->get_parameter("gripper_joint_state_topic").as_string(), 10);
+
 		open_server_ = rclcpp_action::create_server<OpenGripper>(
 			this,
 			"open_gripper",
@@ -68,6 +85,17 @@ public:
 			std::bind(&FeetechGripperActionNode::handle_goal_close, this, std::placeholders::_1, std::placeholders::_2),
 			std::bind(&FeetechGripperActionNode::handle_cancel_close, this, std::placeholders::_1),
 			std::bind(&FeetechGripperActionNode::handle_accepted_close, this, std::placeholders::_1));
+
+		if (this->get_parameter("publish_gripper_joint_states").as_bool()) {
+			const double rate_hz = this->get_parameter("gripper_joint_state_rate_hz").as_double();
+			if (rate_hz > 0.0) {
+				joint_state_timer_ = this->create_wall_timer(
+					std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / rate_hz)),
+					std::bind(&FeetechGripperActionNode::publish_gripper_joint_states_timer_cb, this));
+			} else {
+				publish_gripper_joint_states_from_feedback();
+			}
+		}
 
 		RCLCPP_INFO(this->get_logger(), "Feetech gripper action node ready.");
 	}
@@ -142,6 +170,110 @@ private:
 			std::lround(static_cast<double>(zero) + static_cast<double>(direction) * (position_value * ticks_per_rad)));
 	}
 
+	double ticks_to_command_units(int position_ticks) const
+	{
+		if (!this->get_parameter("position_is_radians").as_bool()) {
+			return static_cast<double>(position_ticks);
+		}
+
+		constexpr double two_pi = 6.2831853071795864769;
+		const double ticks_per_rev = static_cast<double>(this->get_parameter("ticks_per_rev").as_int());
+		const int direction = this->get_parameter("direction").as_int();
+		const int zero = this->get_parameter("zero_offset_ticks").as_int();
+		const double ticks_per_rad = ticks_per_rev / two_pi;
+
+		if (ticks_per_rad == 0.0 || direction == 0) {
+			return 0.0;
+		}
+
+		return (static_cast<double>(position_ticks) - static_cast<double>(zero)) /
+			(static_cast<double>(direction) * ticks_per_rad);
+	}
+
+	std::vector<std::string> joint_state_names() const
+	{
+		const auto prefix = this->get_parameter("gripper_joint_name_prefix").as_string();
+		auto names = this->get_parameter("gripper_joint_state_names").as_string_array();
+		for (auto & name : names) {
+			name = prefix + name;
+		}
+		return names;
+	}
+
+	std::vector<double> joint_state_multipliers() const
+	{
+		return this->get_parameter("gripper_joint_state_multipliers").as_double_array();
+	}
+
+	std::vector<double> joint_state_offsets() const
+	{
+		return this->get_parameter("gripper_joint_state_offsets").as_double_array();
+	}
+
+	void publish_gripper_joint_states(double command_position_value)
+	{
+		if (!this->get_parameter("publish_gripper_joint_states").as_bool()) {
+			return;
+		}
+
+		const auto names = joint_state_names();
+		if (names.empty()) {
+			return;
+		}
+
+		const auto multipliers = joint_state_multipliers();
+		auto offsets = joint_state_offsets();
+
+		if (multipliers.size() != names.size()) {
+			RCLCPP_ERROR(
+				this->get_logger(),
+				"publish_gripper_joint_states is enabled but gripper_joint_state_multipliers does not match gripper_joint_state_names in length.");
+			return;
+		}
+
+		if (!offsets.empty() && offsets.size() != names.size()) {
+			RCLCPP_ERROR(
+				this->get_logger(),
+				"publish_gripper_joint_states is enabled but gripper_joint_state_offsets does not match gripper_joint_state_names in length.");
+			return;
+		}
+
+		if (offsets.empty()) {
+			offsets.assign(names.size(), 0.0);
+		}
+
+		sensor_msgs::msg::JointState msg;
+		msg.header.stamp = this->get_clock()->now();
+		msg.name = names;
+		msg.position.reserve(names.size());
+		for (std::size_t index = 0; index < names.size(); ++index) {
+			msg.position.push_back(offsets[index] + (multipliers[index] * command_position_value));
+		}
+
+		joint_state_pub_->publish(msg);
+	}
+
+	void publish_gripper_joint_states_from_feedback()
+	{
+		if (!this->get_parameter("publish_gripper_joint_states").as_bool()) {
+			return;
+		}
+
+		try {
+			ensure_connected();
+			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
+			const int pos = driver_->getCurrentPosition(servo_id);
+			publish_gripper_joint_states(ticks_to_command_units(pos));
+		} catch (const std::exception & e) {
+			RCLCPP_WARN(this->get_logger(), "Failed to publish gripper joint states from feedback: %s", e.what());
+		}
+	}
+
+	void publish_gripper_joint_states_timer_cb()
+	{
+		publish_gripper_joint_states_from_feedback();
+	}
+
 	void ensure_connected()
 	{
 		if (driver_) {
@@ -172,7 +304,8 @@ private:
 			throw std::runtime_error("Failed to initialize STSServoDriver on: " + device_name);
 		}
 		if (!driver_->ping(static_cast<byte>(servo_id))) {
-			RCLCPP_WARN(this->get_logger(), "Servo ID %d did not respond to ping (check id/baud/cabling).", servo_id);
+			RCLCPP_WARN(
+				this->get_logger(), "Servo ID %d did not respond to ping (check id/baud/cabling).", static_cast<int>(servo_id));
 		}
 
 		driver_->setMode(static_cast<byte>(servo_id), STSMode::POSITION);
@@ -232,6 +365,7 @@ private:
 				}
 
 				const int pos = driver_->getCurrentPosition(servo_id);
+				publish_gripper_joint_states(ticks_to_command_units(pos));
 				const int err = std::abs(target_ticks - pos);
 				if (err <= tolerance) {
 					feedback->progress = 1.0f;
@@ -319,6 +453,7 @@ private:
 				}
 
 				const int pos = driver_->getCurrentPosition(servo_id);
+				publish_gripper_joint_states(ticks_to_command_units(pos));
 				const int err = std::abs(target_ticks - pos);
 				if (err <= tolerance) {
 					feedback->progress = 1.0f;
@@ -359,6 +494,8 @@ private:
 
 	std::unique_ptr<LinuxSerial> serial_;
 	std::unique_ptr<STSServoDriver> driver_;
+	rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
+	rclcpp::TimerBase::SharedPtr joint_state_timer_;
 
 	rclcpp_action::Server<OpenGripper>::SharedPtr open_server_;
 	rclcpp_action::Server<CloseGripper>::SharedPtr close_server_;
