@@ -16,7 +16,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[params_file],
     )
 
-    default_params = [FindPackageShare('gripper_ros'), 'config', 'feetech.yaml']
+    default_params = [FindPackageShare('gripper_ros'), 'config', 'motors', 'feetech.yaml']
 
     return LaunchDescription(
         [

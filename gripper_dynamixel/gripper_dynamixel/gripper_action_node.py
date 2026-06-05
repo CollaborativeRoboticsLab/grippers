@@ -25,6 +25,7 @@ from typing import Callable, Optional, TypeVar
 import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.node import Node
+from sensor_msgs.msg import JointState
 
 from gripper_msgs.action import CloseGripper, OpenGripper
 from dynamixel_sdk import PacketHandler, PortHandler
@@ -194,7 +195,23 @@ class DynamixelGripperActionNode(Node):
         self.declare_parameter(self.motor_model + '.comm_retry_backoff', 1.7)
         self.declare_parameter(self.motor_model + '.comm_retry_reinit_every', 5)
 
+        # Optional gripper-level joint-state publication. This bridges the articulated gripper
+        # mechanism into robot_state_publisher without hard-coding a specific linkage model.
+        self.declare_parameter('publish_gripper_joint_states', False)
+        self.declare_parameter('gripper_joint_state_topic', 'joint_states')
+        self.declare_parameter('gripper_joint_name_prefix', '')
+        self.declare_parameter('gripper_joint_state_names', [])
+        self.declare_parameter('gripper_joint_state_multipliers', [])
+        self.declare_parameter('gripper_joint_state_offsets', [])
+        self.declare_parameter('gripper_joint_state_rate_hz', 10.0)
+
         self._dxl: Optional[DynamixelProtocol2Driver] = None
+        self._joint_state_pub = self.create_publisher(
+            JointState,
+            str(self.get_parameter('gripper_joint_state_topic').value),
+            10,
+        )
+        self._joint_state_timer = None
 
         ok = self._init_dynamixel()
         if not ok and bool(self.get_parameter('shutdown_on_init_failure').value):
@@ -217,6 +234,13 @@ class DynamixelGripperActionNode(Node):
             goal_callback=self._goal_cb,
             cancel_callback=self._cancel_cb,
         )
+
+        if bool(self.get_parameter('publish_gripper_joint_states').value):
+            rate_hz = float(self.get_parameter('gripper_joint_state_rate_hz').value)
+            if rate_hz > 0.0:
+                self._joint_state_timer = self.create_timer(1.0 / rate_hz, self._publish_gripper_joint_states_timer_cb)
+            else:
+                self._publish_gripper_joint_states_from_feedback(goal_handle=None)
 
         self.get_logger().info('Dynamixel gripper action node ready.')
 
@@ -341,6 +365,86 @@ class DynamixelGripperActionNode(Node):
         ticks_per_rad = ticks_per_rev * gear_ratio / (2.0 * math.pi)
         return int(round(zero + direction * (position_value * ticks_per_rad)))
 
+    def _ticks_to_command_units(self, position_ticks: int) -> float:
+        if not bool(self.get_parameter(self.motor_model + '.position_is_radians').value):
+            return float(position_ticks)
+
+        ticks_per_rev = float(self.get_parameter(self.motor_model + '.ticks_per_rev').value)
+        gear_ratio = float(self.get_parameter(self.motor_model + '.gear_ratio').value)
+        direction = int(self.get_parameter(self.motor_model + '.direction').value)
+        zero = int(self.get_parameter(self.motor_model + '.zero_offset_ticks').value)
+
+        ticks_per_rad = ticks_per_rev * gear_ratio / (2.0 * math.pi)
+        if ticks_per_rad == 0.0:
+            return 0.0
+        return float(position_ticks - zero) / (float(direction) * ticks_per_rad)
+
+    def _joint_state_names(self) -> list[str]:
+        names = self.get_parameter('gripper_joint_state_names').value
+        prefix = str(self.get_parameter('gripper_joint_name_prefix').value)
+        return [prefix + str(name) for name in names]
+
+    def _joint_state_multipliers(self) -> list[float]:
+        values = self.get_parameter('gripper_joint_state_multipliers').value
+        return [float(value) for value in values]
+
+    def _joint_state_offsets(self) -> list[float]:
+        values = self.get_parameter('gripper_joint_state_offsets').value
+        return [float(value) for value in values]
+
+    def _publish_gripper_joint_states(self, command_position_value: Optional[float]) -> None:
+        if not bool(self.get_parameter('publish_gripper_joint_states').value):
+            return
+
+        names = self._joint_state_names()
+        if not names:
+            return
+
+        multipliers = self._joint_state_multipliers()
+        offsets = self._joint_state_offsets()
+
+        if len(multipliers) != len(names):
+            self.get_logger().error(
+                'publish_gripper_joint_states is enabled but gripper_joint_state_multipliers '
+                'does not match gripper_joint_state_names in length.'
+            )
+            return
+
+        if offsets and len(offsets) != len(names):
+            self.get_logger().error(
+                'publish_gripper_joint_states is enabled but gripper_joint_state_offsets '
+                'does not match gripper_joint_state_names in length.'
+            )
+            return
+
+        if not offsets:
+            offsets = [0.0] * len(names)
+
+        scalar = 0.0 if command_position_value is None else float(command_position_value)
+
+        msg = JointState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.name = names
+        msg.position = [offset + (multiplier * scalar) for multiplier, offset in zip(multipliers, offsets)]
+        self._joint_state_pub.publish(msg)
+
+    def _publish_gripper_joint_states_from_feedback(self, goal_handle) -> None:
+        if not bool(self.get_parameter('publish_gripper_joint_states').value):
+            return
+
+        if self._dxl is None:
+            self._publish_gripper_joint_states(command_position_value=0.0)
+            return
+
+        try:
+            current_ticks = self._dxl_with_retry(goal_handle, 'read_present_position', self._dxl.read_present_position)
+            self._publish_gripper_joint_states(self._ticks_to_command_units(current_ticks))
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warn(f'Failed to publish gripper joint states from feedback: {exc}')
+
+    def _publish_gripper_joint_states_timer_cb(self) -> None:
+        self._publish_gripper_joint_states_from_feedback(goal_handle=None)
+
     def _goal_cb(self, _goal_request) -> GoalResponse:
         return GoalResponse.ACCEPT
 
@@ -422,6 +526,7 @@ class DynamixelGripperActionNode(Node):
             if self._dxl is not None and target_ticks is not None:
                 try:
                     pos = self._dxl.read_present_position()
+                    self._publish_gripper_joint_states(self._ticks_to_command_units(pos))
                     err = abs(int(target_ticks) - int(pos))
 
                     if err <= tolerance:
@@ -436,6 +541,7 @@ class DynamixelGripperActionNode(Node):
             else:
                 # Time-based progress fallback
                 progress = float(max(0.0, min(1.0, elapsed / timeout)))
+                self._publish_gripper_joint_states_from_feedback(goal_handle)
 
             goal_handle.publish_feedback(feedback_cls(progress=float(progress)))
             time.sleep(sleep_sec)

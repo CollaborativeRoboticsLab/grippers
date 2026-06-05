@@ -8,6 +8,7 @@
   <license>TODO: License declaration</license>
 
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>gripper_msgs</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>dynamixel_sdk</exec_depend>

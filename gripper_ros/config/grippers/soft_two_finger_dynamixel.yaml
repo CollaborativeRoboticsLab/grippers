@@ -1,0 +1,63 @@
+gripper_dynamixel_action_node:
+  ros__parameters:
+    # Gripper-level selection: choose the motor preset and override the site-specific values
+    # for this concrete gripper instance.
+    motor_model: XM430
+
+    # Publish the articulation joints needed by robot_state_publisher so the sliding support
+    # subtree remains connected in TF. The current coefficients keep the planar/linkage joints
+    # at zero and drive the primary motor joint from the measured motor position.
+    # Tune these multipliers/offsets as the linkage model evolves.
+    publish_gripper_joint_states: true
+    gripper_joint_state_topic: joint_states
+    gripper_joint_name_prefix: ''
+    gripper_joint_state_rate_hz: 10.0
+    gripper_joint_state_names:
+      - gripper_planar_4
+      - gripper_planar_4_1
+      - gripper_planar_4_2
+      - gripper_planar_5
+      - gripper_planar_5_1
+      - gripper_planar_5_2
+      - gripper_revolute_1
+      - gripper_revolute_2
+      - gripper_revolute_3
+      - gripper_revolute_5_loop_closure
+      - gripper_revolute_6_loop_closure
+    gripper_joint_state_multipliers:
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0015339807878856412
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+    gripper_joint_state_offsets:
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+
+    XM430:
+      device_name: /dev/ttyUSB0
+      baudrate: 57600
+      dxl_id: 1
+
+      position_is_radians: false
+      open_position: 900.0
+      close_position: 2000.0
+
+      use_torque_mode: false
+      default_torque: 0.0
+      close_default: true
