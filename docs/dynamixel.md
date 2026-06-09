@@ -73,6 +73,18 @@ Edit `gripper_ros/config/dynamixel.yaml`:
 - `dxl_id`: the motor ID
 - `open_position` / `close_position`: your gripper’s open/close targets
 
+If you do not know the motor ID or baudrate yet, use the probe script before editing the config:
+
+```bash
+source install/setup.bash
+python3 src/grippers/gripper_dynamixel/find_id.py \
+  --device /dev/ttyUSB0 \
+  --baudrate-sweep 57600 115200 1000000 2000000 3000000 4000000 \
+  --scan-start 0 \
+  --scan-end 252 \
+  --no-poll
+```
+
 ### 3) Run
 
 Launch via `gripper_ros`:
@@ -92,6 +104,58 @@ ros2 launch gripper_ros dyanmixel.launch.py params_file:=/abs/path/to/dynamixel.
 ## Sending actions
 
 See `docs/action_interface.md` for action goal examples.
+
+## Probe and diagnostics
+
+The repository includes a standalone probe script at `src/grippers/gripper_dynamixel/find_id.py`.
+
+Use it when you need to:
+
+- scan an ID range
+- sweep multiple baudrates
+- poll common registers from a known servo
+
+### Scan one baudrate across an ID range
+
+```bash
+python3 src/grippers/gripper_dynamixel/find_id.py \
+  --device /dev/ttyUSB0 \
+  --baudrate 57600 \
+  --scan-start 0 \
+  --scan-end 20 \
+  --no-poll
+```
+
+### Sweep common baudrates and IDs
+
+```bash
+python3 src/grippers/gripper_dynamixel/find_id.py \
+  --device /dev/ttyUSB0 \
+  --common-baudrate-sweep \
+  --scan-start 0 \
+  --scan-end 252 \
+  --no-poll
+```
+
+### Poll a known servo continuously
+
+```bash
+python3 src/grippers/gripper_dynamixel/find_id.py \
+  --device /dev/ttyUSB0 \
+  --id 1 \
+  --baudrate 57600 \
+  --count 0 \
+  --interval 0.5
+```
+
+The script prints `model`, `operating_mode`, `torque_enable`, `hardware_error`, `present_current`, and `present_position` when a servo is reachable.
+
+### Interpreting common failures
+
+- `There is no status packet!`: transmit succeeded, but no valid Dynamixel reply came back. Check power, wiring, adapter type, baudrate, protocol version, and ID.
+- `Incorrect status packet!`: some bytes came back, but they were not a valid Dynamixel response. This usually points to bus noise, the wrong serial device, or a non-Dynamixel device on that port.
+- Port changed from `/dev/ttyUSB0` to `/dev/ttyUSB1`: the USB serial adapter re-enumerated after reconnect/reset. Re-run the probe on the new device path.
+- `Permission denied`: fix serial permissions first with the `dialout` group change described above, then log out/in before retrying.
 
 ## Parameter reference (most important)
 

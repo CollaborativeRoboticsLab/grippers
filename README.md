@@ -74,6 +74,7 @@ source install/setup.bash
 
 - Motor config: `gripper_ros/config/motors/dynamixel.yaml`
 - Gripper config example: `gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`
+- Probe / scan script: `gripper_dynamixel/find_id.py`
 - Motor-only launch:
 
 ```bash
@@ -101,6 +102,30 @@ ros2 launch gripper_ros gripper_soft_two_finger.launch.py \
 ```
 
 See [docs/dynamixel.md](docs/dynamixel.md) for motor model presets and parameter details.
+
+Quick ID + baudrate sweep:
+
+```bash
+python3 src/grippers/gripper_dynamixel/find_id.py \
+	--device /dev/ttyUSB0 \
+	--baudrate-sweep 57600 115200 1000000 2000000 3000000 4000000 \
+	--scan-start 0 \
+	--scan-end 252 \
+	--no-poll
+```
+
+Quick polling of a known servo:
+
+```bash
+python3 src/grippers/gripper_dynamixel/find_id.py \
+	--device /dev/ttyUSB0 \
+	--id 1 \
+	--baudrate 57600 \
+	--count 0 \
+	--interval 0.5
+```
+
+If a USB serial adapter is unplugged and replugged, the device path may change from `/dev/ttyUSB0` to `/dev/ttyUSB1` or similar. Recheck `/dev/ttyUSB*` before assuming the motor settings changed.
 
 ### Feetech (STS/SCS)
 

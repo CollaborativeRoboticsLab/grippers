@@ -438,7 +438,7 @@ class DynamixelGripperActionNode(Node):
             return
 
         try:
-            current_ticks = self._dxl_with_retry(goal_handle, 'read_present_position', self._dxl.read_present_position)
+            current_ticks = self._dxl_with_retry(goal_handle, 'read_present_position', lambda: self._dxl.read_present_position())
             self._publish_gripper_joint_states(self._ticks_to_command_units(current_ticks))
         except Exception as exc:  # noqa: BLE001
             self.get_logger().warn(f'Failed to publish gripper joint states from feedback: {exc}')
@@ -467,9 +467,9 @@ class DynamixelGripperActionNode(Node):
 
         target_ticks = self._position_to_ticks(target_position)
 
-        self._dxl_with_retry(goal_handle, 'disable_torque', self._dxl.disable_torque)
+        self._dxl_with_retry(goal_handle, 'disable_torque', lambda: self._dxl.disable_torque())
         self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_position))
-        self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+        self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
         self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
         return target_ticks
 
@@ -480,11 +480,11 @@ class DynamixelGripperActionNode(Node):
         # `torque` is treated as a raw Goal Current value by default (model-specific units).
         goal_current = int(round(torque))
 
-        self._dxl_with_retry(goal_handle, 'disable_torque', self._dxl.disable_torque)
+        self._dxl_with_retry(goal_handle, 'disable_torque', lambda: self._dxl.disable_torque())
 
         if target_position is None:
             self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_current))
-            self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+            self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
             self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
             return None
 
@@ -494,7 +494,7 @@ class DynamixelGripperActionNode(Node):
             'set_operating_mode',
             lambda: self._dxl.set_operating_mode(self._dxl.mode_current_based_position),
         )
-        self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+        self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
         self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
         self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
         return target_ticks
@@ -568,9 +568,9 @@ class DynamixelGripperActionNode(Node):
 
         target_ticks = self._position_to_ticks(target_position)
 
-        self._dxl_with_retry(goal_handle, 'disable_torque', self._dxl.disable_torque)
+        self._dxl_with_retry(goal_handle, 'disable_torque', lambda: self._dxl.disable_torque())
         self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_position))
-        self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+        self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
         self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
         return target_ticks
 
@@ -581,11 +581,11 @@ class DynamixelGripperActionNode(Node):
         # `torque` is treated as a raw Goal Current value by default (model-specific units).
         goal_current = int(round(torque))
 
-        self._dxl_with_retry(goal_handle, 'disable_torque', self._dxl.disable_torque)
+        self._dxl_with_retry(goal_handle, 'disable_torque', lambda: self._dxl.disable_torque())
 
         if target_position is None:
             self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_current))
-            self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+            self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
             self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
             return None
 
@@ -595,7 +595,7 @@ class DynamixelGripperActionNode(Node):
             'set_operating_mode',
             lambda: self._dxl.set_operating_mode(self._dxl.mode_current_based_position),
         )
-        self._dxl_with_retry(goal_handle, 'enable_torque', self._dxl.enable_torque)
+        self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
         self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
         self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
         return target_ticks
