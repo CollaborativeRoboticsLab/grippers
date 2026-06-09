@@ -5,8 +5,10 @@ ROS 2 gripper drivers that expose a **common action-based API** for opening/clos
 ## Packages
 
 - `gripper_msgs`: ROS 2 action definitions (`OpenGripper`, `CloseGripper`).
-- `gripper_dynamixel`: DynamixelSDK (Protocol 2.0) based action server (Python).
-- `gripper_feetech`: Feetech STS/SCS based action server (C++).
+- `gripper_servo_dynamixel`: low-level DynamixelSDK (Protocol 2.0) servo/action package (Python).
+- `gripper_two_fingers`: gripper-level two-finger Dynamixel wrapper (Python).
+- `gripper_servo_feetech`: low-level Feetech STS/SCS servo/action package (C++).
+- `gripper_feetech_test`: gripper-level Feetech test wrapper (C++).
 - `gripper_ros`: launch files + centralized motor/gripper parameter YAMLs.
 
 ## Action API
@@ -120,7 +122,7 @@ Read the [action interface docs](docs/action_interface.md) for more details on g
 Quick ID + baudrate sweep:
 
 ```bash
-python3 src/grippers/gripper_dynamixel/find_id.py \
+python3 src/grippers/gripper_servo_dynamixel/find_id.py \
 	--device /dev/ttyUSB0 \
 	--baudrate-sweep 57600 115200\
 	--scan-start 0 \
@@ -131,7 +133,7 @@ python3 src/grippers/gripper_dynamixel/find_id.py \
 Quick polling of a known servo:
 
 ```bash
-python3 src/grippers/gripper_dynamixel/find_id.py \
+python3 src/grippers/gripper_servo_dynamixel/find_id.py \
 	--device /dev/ttyUSB0 \
 	--id 1 \
 	--baudrate 57600 \

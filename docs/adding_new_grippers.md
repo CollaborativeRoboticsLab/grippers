@@ -65,6 +65,10 @@ Gripper configs live in:
 
 Each file in this directory describes one complete gripper assembly.
 
+Important: the top-level YAML key must match the launched ROS node name.
+For example, the current two-finger wrapper uses `gripper_two_fingers_node`, while the
+low-level Dynamixel-only node uses `gripper_dynamixel_action_node`.
+
 For a Dynamixel gripper, the file should usually:
 
 1. Select the motor preset with `motor_model`.
@@ -80,11 +84,33 @@ Important fields in a gripper overlay:
 
 - `motor_model`: chooses the preset from the motor YAML.
 - `publish_gripper_joint_states`: enables `JointState` publishing from the action node.
-- `gripper_joint_state_names`: URDF joint names that should be published.
-- `gripper_joint_state_multipliers`: mapping from the measured motor motion to each gripper joint.
-- `gripper_joint_state_offsets`: constant offsets for those joints.
+
+Preferred current articulation model for the two-finger gripper:
+
+- `gripper_left_finger.joint_name`
+- `gripper_left_finger.multiplier`
+- `gripper_left_finger.offset`
+- `gripper_right_finger.joint_name`
+- `gripper_right_finger.multiplier`
+- `gripper_right_finger.offset`
+
+Legacy fallback model still supported in code:
+
+- `gripper_joint_state_names`
+- `gripper_joint_state_multipliers`
+- `gripper_joint_state_offsets`
 
 For the current single-motor setup, one motor position is mapped into one or more gripper joints with multipliers and offsets.
+
+For the current coupled two-finger mechanism, the preferred interpretation is:
+
+- left finger displacement from center
+- right finger displacement from center
+- each side approximately equal to half of the total finger spacing change
+
+For the current preferred setup, use only the primary support displacement joints
+(`gripper_planar_4` and `gripper_planar_5`) unless hardware testing shows that the
+secondary planar joints must also be driven explicitly.
 
 For a future multi-motor gripper, this part will need to evolve. The likely direction is one of:
 
@@ -108,6 +134,10 @@ For a gripper-level launch, compose:
 The current example is:
 
 - [`gripper_ros/launch/gripper_dynamixel.launch.py`](../gripper_ros/launch/gripper_dynamixel.launch.py)
+
+The current gripper-level Dynamixel wrapper launch is:
+
+- [`gripper_ros/launch/gripper_soft_two_finger.launch.py`](../gripper_ros/launch/gripper_soft_two_finger.launch.py)
 
 That launch file loads both parameter files into the action node:
 
@@ -141,6 +171,13 @@ After adding the gripper:
 5. confirm the expected moving gripper subtree remains connected
 
 If the TF tree is broken at a moving joint, the most common cause is missing `joint_states` for the mechanism joints.
+
+For the current two-finger Dynamixel wrapper, the intended architecture is:
+
+- `robot_state_publisher` for most transforms
+- explicit dynamic TF publication in `gripper_two_fingers` for the two support-connectivity bridges
+
+Do not assume that omitted revolute joints will move automatically unless the URDF explicitly models that coupling.
 
 If the TF tree is connected but the motion is visually wrong, adjust:
 

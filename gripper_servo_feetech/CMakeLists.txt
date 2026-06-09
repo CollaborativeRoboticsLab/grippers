@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(gripper_feetech)
+project(gripper_servo_feetech)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -22,6 +22,14 @@ target_include_directories(gripper_feetech_action_node PUBLIC
 )
 
 ament_target_dependencies(gripper_feetech_action_node
+  rclcpp
+  rclcpp_action
+  sensor_msgs
+  gripper_msgs
+)
+
+ament_export_include_directories(include)
+ament_export_dependencies(
   rclcpp
   rclcpp_action
   sensor_msgs

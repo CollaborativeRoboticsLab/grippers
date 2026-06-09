@@ -1,19 +1,19 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>gripper_ros</name>
+  <name>gripper_feetech_test</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="kalanaratnayake95@gmail.com">kalana</maintainer>
+  <description>Feetech C++ test gripper node (rclcpp) to replace previous Python dummy package.</description>
+  <maintainer email="ubuntu@example.com">ubuntu</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <exec_depend>launch</exec_depend>
-  <exec_depend>launch_ros</exec_depend>
-  <exec_depend>gripper_servo_dynamixel</exec_depend>
-  <exec_depend>gripper_two_fingers</exec_depend>
-  <exec_depend>gripper_servo_feetech</exec_depend>
+  <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>sensor_msgs</depend>
+  <depend>gripper_msgs</depend>
+  <depend>gripper_servo_feetech</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

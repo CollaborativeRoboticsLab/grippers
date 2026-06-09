@@ -10,7 +10,7 @@ def generate_launch_description() -> LaunchDescription:
 	params_file = LaunchConfiguration('params_file')
 
 	gripper_node = Node(
-		package='gripper_dynamixel',
+		package='gripper_servo_dynamixel',
 		executable='gripper_dynamixel_action_node',
 		name='gripper_dynamixel_action_node',
 		output='screen',

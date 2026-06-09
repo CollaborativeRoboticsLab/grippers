@@ -20,17 +20,24 @@
 #include <gripper_msgs/action/close_gripper.hpp>
 
 // Ensure HardwareSerial is defined for the STS driver.
-#include "gripper_feetech/Feetech-STSServo/linux_serial.hpp"
-#include "gripper_feetech/Feetech-STSServo/STSServoDriver.hpp"
+#include "gripper_servo_feetech/Feetech-STSServo/linux_serial.hpp"
+#include "gripper_servo_feetech/Feetech-STSServo/STSServoDriver.hpp"
 
-namespace gripper_feetech
+namespace gripper_servo_feetech
 {
 
 class FeetechGripperActionNode : public rclcpp::Node
 {
 public:
-	explicit FeetechGripperActionNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
-	: rclcpp::Node("gripper_feetech_action_node", options)
+	explicit FeetechGripperActionNode(const rclcpp::NodeOptions & options)
+	: FeetechGripperActionNode("gripper_servo_feetech_action_node", options)
+	{
+	}
+
+	explicit FeetechGripperActionNode(
+		const std::string & node_name = "gripper_servo_feetech_action_node",
+		const rclcpp::NodeOptions & options = rclcpp::NodeOptions())
+	: rclcpp::Node(node_name, options)
 	{
 		// Transport
 		this->declare_parameter<std::string>("device_name", "/dev/ttyUSB0");
@@ -143,6 +150,11 @@ private:
 	bool resolve_use_torque_mode(bool goal_flag) const
 	{
 		return goal_flag || this->get_parameter("use_torque_mode").as_bool();
+	}
+
+	bool is_at_target(int current_ticks, int target_ticks, int tolerance_ticks) const
+	{
+		return std::abs(target_ticks - current_ticks) <= tolerance_ticks;
 	}
 
 	int resolve_torque_limit(double requested) const
@@ -340,16 +352,27 @@ private:
 		}
 
 		try {
+			ensure_connected();
+			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
 			const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
 			if (use_torque_mode) {
 				apply_torque_limit(resolve_torque_limit(goal->torque));
 			}
 
 			const int target_ticks = position_to_ticks(open_pos);
+			const int current_pos = driver_->getCurrentPosition(servo_id);
+			publish_gripper_joint_states(ticks_to_command_units(current_pos));
+			if (is_at_target(current_pos, target_ticks, tolerance)) {
+				auto result = std::make_shared<OpenGripper::Result>();
+				result->success = true;
+				result->message = "Gripper already open.";
+				goal_handle->succeed(result);
+				return;
+			}
+
 			apply_position_target(target_ticks, speed);
 
-			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
-			const int start_pos = driver_->getCurrentPosition(servo_id);
+			const int start_pos = current_pos;
 			const int start_err = std::max(1, std::abs(target_ticks - start_pos));
 			const auto start_time = std::chrono::steady_clock::now();
 
@@ -428,16 +451,27 @@ private:
 		}
 
 		try {
+			ensure_connected();
+			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
 			const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
 			if (use_torque_mode) {
 				apply_torque_limit(resolve_torque_limit(goal->torque));
 			}
 
 			const int target_ticks = position_to_ticks(close_pos);
+			const int current_pos = driver_->getCurrentPosition(servo_id);
+			publish_gripper_joint_states(ticks_to_command_units(current_pos));
+			if (is_at_target(current_pos, target_ticks, tolerance)) {
+				auto result = std::make_shared<CloseGripper::Result>();
+				result->success = true;
+				result->message = "Gripper already closed.";
+				goal_handle->succeed(result);
+				return;
+			}
+
 			apply_position_target(target_ticks, speed);
 
-			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
-			const int start_pos = driver_->getCurrentPosition(servo_id);
+			const int start_pos = current_pos;
 			const int start_err = std::max(1, std::abs(target_ticks - start_pos));
 			const auto start_time = std::chrono::steady_clock::now();
 
@@ -501,5 +535,5 @@ private:
 	rclcpp_action::Server<CloseGripper>::SharedPtr close_server_;
 };
 
-}  // namespace gripper_feetech
+}  // namespace gripper_servo_feetech
 

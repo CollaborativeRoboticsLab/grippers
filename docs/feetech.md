@@ -1,9 +1,9 @@
 
 # Feetech (STS/SCS) gripper
 
-This workspace includes a ROS 2 **action server** for a Feetech STS/SCS-style servo-based gripper, using the driver sources vendored in `gripper_feetech/include/gripper_feetech/Feetech-STSServo`.
+This workspace includes a ROS 2 **action server** for a Feetech STS/SCS-style servo-based gripper, using the driver sources vendored in `gripper_servo_feetech/include/gripper_servo_feetech/Feetech-STSServo`.
 
-- Node: `gripper_feetech_action_node` (package: `gripper_feetech`)
+- Node: `gripper_feetech_action_node` (package: `gripper_servo_feetech`)
 - Launch: `gripper_ros/launch/feetech.launch.py`
 - Main config: `gripper_ros/config/feetech.yaml`
 

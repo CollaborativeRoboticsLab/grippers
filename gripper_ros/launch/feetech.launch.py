@@ -9,7 +9,7 @@ def generate_launch_description() -> LaunchDescription:
     params_file = LaunchConfiguration('params_file')
 
     gripper_node = Node(
-        package='gripper_feetech',
+        package='gripper_servo_feetech',
         executable='gripper_feetech_action_node',
         name='gripper_feetech_action_node',
         output='screen',

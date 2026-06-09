@@ -10,9 +10,9 @@ def generate_launch_description() -> LaunchDescription:
     gripper_params_file = LaunchConfiguration('gripper_params_file')
 
     gripper_node = Node(
-        package='gripper_dynamixel',
-        executable='gripper_dynamixel_action_node',
-        name='gripper_dynamixel_action_node',
+        package='gripper_two_fingers',
+        executable='gripper_two_fingers_node',
+        name='gripper_two_fingers_node',
         output='screen',
         parameters=[motor_params_file, gripper_params_file],
     )

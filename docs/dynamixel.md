@@ -5,7 +5,22 @@ This workspace provides a ROS 2 **action server** node that opens/closes a custo
 
 The main entrypoint is:
 
-- Node: `gripper_dynamixel_action_node` (package: `gripper_dynamixel`)
+- Node: `gripper_dynamixel_action_node` (package: `gripper_servo_dynamixel`)
+
+For the current articulated two-finger gripper wrapper, the gripper-level entrypoint is:
+
+- Node: `gripper_two_fingers_node` (package: `gripper_two_fingers`)
+
+The low-level node owns one Dynamixel servo and the common open/close action behavior.
+The gripper-level wrapper owns articulation publication for `robot_state_publisher`
+by publishing the mechanism `joint_states` needed to keep the TF tree connected.
+
+For the current two-finger wrapper, the preferred articulation model is now:
+
+- one **left finger** displacement parameter block
+- one **right finger** displacement parameter block
+- two dynamic support-connectivity TF bridges published by `gripper_two_fingers`
+- `robot_state_publisher` handling the rest of the tree
 
 This node follows the common action interface described in [Action Interface](./action_interface.md).
 
@@ -18,9 +33,10 @@ There are *two* parameter YAML layers:
 1. **Main runtime config** (in `gripper_ros`)
 	- File: `gripper_ros/config/dynamixel.yaml`
 	- Contains the “site specific” choices: which motor model preset, which serial port, which ID, and your `open_position` / `close_position`.
+  - The current motor YAML uses a wildcard `/**` parameter root so both the low-level and gripper-level nodes can reuse the same motor defaults.
 
-2. **Motor model preset** (in `gripper_dynamixel`)
-	- Files: `gripper_dynamixel/config/<MODEL>.yaml` (examples: `XL330.yaml`, `XM430.yaml`, `W350.yaml`)
+2. **Motor model preset** (in `gripper_servo_dynamixel`)
+  - Files: `gripper_servo_dynamixel/config/<MODEL>.yaml` (examples: `XL330.yaml`, `XM430.yaml`, `W350.yaml`)
 	- Contains the “motor specific” details: control table addresses, operating mode values, and position scaling constants.
 
 At startup the node:
@@ -50,6 +66,35 @@ If you prefer to specify raw ticks directly, set:
 
 - `position_is_radians: false`
 
+### 4) Gripper-level two-finger mapping
+
+At the gripper layer, the current preferred configuration is no longer a flat list of many mechanism joints.
+Instead, use a per-finger mapping:
+
+```yaml
+gripper_left_finger:
+  joint_name: gripper_planar_4
+  multiplier: 0.0
+  offset: 0.0
+
+gripper_right_finger:
+  joint_name: gripper_planar_5
+  multiplier: 0.0
+  offset: 0.0
+```
+
+Interpretation:
+
+- the measured motor position is converted into command units
+- that scalar is mapped into left/right finger support displacement with `multiplier` and `offset`
+- the two support-connectivity TF bridges are then derived from those two values
+
+For a single coupled servo, the intended physical model is usually:
+
+- `finger_displacement ~= total_gap_change / 2`
+
+because each finger moves approximately half the distance relative to the centerline.
+
 ## Quick start
 
 ### 1) Hardware / OS prep
@@ -77,7 +122,7 @@ If you do not know the motor ID or baudrate yet, use the probe script before edi
 
 ```bash
 source install/setup.bash
-python3 src/grippers/gripper_dynamixel/find_id.py \
+python3 src/grippers/gripper_servo_dynamixel/find_id.py \
   --device /dev/ttyUSB0 \
   --baudrate-sweep 57600 115200 1000000 2000000 3000000 4000000 \
   --scan-start 0 \
@@ -94,6 +139,20 @@ source install/setup.bash
 ros2 launch gripper_ros dyanmixel.launch.py
 ```
 
+Launch the gripper-level two-finger wrapper:
+
+```bash
+source install/setup.bash
+ros2 launch gripper_ros gripper_soft_two_finger.launch.py
+```
+
+That wrapper can publish:
+
+- gripper-level `joint_states`
+- two dynamic TF bridges for support connectivity
+
+while `robot_state_publisher` handles the rest of the URDF tree.
+
 Override the params file if needed:
 
 ```bash
@@ -107,7 +166,7 @@ See `docs/action_interface.md` for action goal examples.
 
 ## Probe and diagnostics
 
-The repository includes a standalone probe script at `src/grippers/gripper_dynamixel/find_id.py`.
+The repository includes a standalone probe script at `src/grippers/gripper_servo_dynamixel/find_id.py`.
 
 Use it when you need to:
 
@@ -118,7 +177,7 @@ Use it when you need to:
 ### Scan one baudrate across an ID range
 
 ```bash
-python3 src/grippers/gripper_dynamixel/find_id.py \
+python3 src/grippers/gripper_servo_dynamixel/find_id.py \
   --device /dev/ttyUSB0 \
   --baudrate 57600 \
   --scan-start 0 \
@@ -129,7 +188,7 @@ python3 src/grippers/gripper_dynamixel/find_id.py \
 ### Sweep common baudrates and IDs
 
 ```bash
-python3 src/grippers/gripper_dynamixel/find_id.py \
+python3 src/grippers/gripper_servo_dynamixel/find_id.py \
   --device /dev/ttyUSB0 \
   --common-baudrate-sweep \
   --scan-start 0 \
@@ -140,7 +199,7 @@ python3 src/grippers/gripper_dynamixel/find_id.py \
 ### Poll a known servo continuously
 
 ```bash
-python3 src/grippers/gripper_dynamixel/find_id.py \
+python3 src/grippers/gripper_servo_dynamixel/find_id.py \
   --device /dev/ttyUSB0 \
   --id 1 \
   --baudrate 57600 \
@@ -161,7 +220,7 @@ The script prints `model`, `operating_mode`, `torque_enable`, `hardware_error`, 
 
 ### Config selection
 
-- `motor_model` (string): loads `${share}/config/<motor_model>.yaml` from the `gripper_dynamixel` package.
+- `motor_model` (string): loads `${share}/config/<motor_model>.yaml` from the `gripper_servo_dynamixel` package.
 - `motor_config_path` (string): explicit YAML file path (overrides `motor_model` lookup).
 
 ### Transport
@@ -174,6 +233,40 @@ The script prints `model`, `operating_mode`, `torque_enable`, `hardware_error`, 
 
 - `open_position` (float): target open position (radians by default)
 - `close_position` (float): target close position (radians by default)
+
+### Gripper-level two-finger articulation
+
+- `publish_gripper_joint_states` (bool)
+- `publish_support_connectivity_tf` (bool): publish the two support-connectivity TF bridges
+- `gripper_joint_state_topic` (string)
+- `gripper_joint_name_prefix` (string)
+- `gripper_frame_prefix` (string)
+
+Preferred parameters:
+
+- `gripper_left_finger.joint_name`
+- `gripper_left_finger.multiplier`
+- `gripper_left_finger.offset`
+- `gripper_right_finger.joint_name`
+- `gripper_right_finger.multiplier`
+- `gripper_right_finger.offset`
+
+Legacy fallback parameters still supported in code:
+
+- `gripper_joint_state_names`
+- `gripper_joint_state_multipliers`
+- `gripper_joint_state_offsets`
+
+The preferred current setup is to use only:
+
+- `gripper_planar_4`
+- `gripper_planar_5`
+
+and **not** publish `gripper_revolute_*` from the node for now.
+
+Important caveat: if `gripper_revolute_*` are not published, `robot_state_publisher`
+will not make them move automatically unless the URDF models those relationships explicitly
+(for example with `mimic` or a different kinematic structure).
 
 ### Motion completion behavior
 
@@ -244,9 +337,9 @@ gripper_dynamixel_action_node:
 
 ### Custom motor preset (new model file)
 
-To add a new model preset, create a new file in `gripper_dynamixel/config/`, for example:
+To add a new model preset, create a new file in `gripper_servo_dynamixel/config/`, for example:
 
-`gripper_dynamixel/config/MY_GRIPPER.yaml`
+`gripper_servo_dynamixel/config/MY_GRIPPER.yaml`
 
 ```yaml
 gripper_dynamixel_action_node:

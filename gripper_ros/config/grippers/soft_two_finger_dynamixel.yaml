@@ -1,4 +1,4 @@
-gripper_dynamixel_action_node:
+gripper_two_fingers_node:
   ros__parameters:
     # Gripper-level selection: choose the motor preset and override the site-specific values
     # for this concrete gripper instance.
@@ -8,46 +8,30 @@ gripper_dynamixel_action_node:
     # subtree remains connected in TF. The current coefficients keep the planar/linkage joints
     # at zero and drive the primary motor joint from the measured motor position.
     # Tune these multipliers/offsets as the linkage model evolves.
+    # When publish_support_connectivity_tf=true, the planar_* entries are used internally
+    # to build the two dynamic support connectivity transforms and are not re-published on
+    # /joint_states, avoiding duplicate TF paths.
     publish_gripper_joint_states: true
+    publish_support_connectivity_tf: true
     gripper_joint_state_topic: joint_states
+    gripper_frame_prefix: ''
     gripper_joint_name_prefix: ''
     gripper_joint_state_rate_hz: 10.0
-    gripper_joint_state_names:
-      - gripper_planar_4
-      - gripper_planar_4_1
-      - gripper_planar_4_2
-      - gripper_planar_5
-      - gripper_planar_5_1
-      - gripper_planar_5_2
-      - gripper_revolute_1
-      - gripper_revolute_2
-      - gripper_revolute_3
-      - gripper_revolute_5_loop_closure
-      - gripper_revolute_6_loop_closure
-    gripper_joint_state_multipliers:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0015339807878856412
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-    gripper_joint_state_offsets:
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
-      - 0.0
+
+    # Preferred gripper-level articulation model:
+    # - One coupled displacement joint per finger side.
+    # - The support connectivity TF bridges use these values directly.
+    # - The remaining planar_*_1 / planar_*_2 and gripper_revolute_* joints are intentionally
+    #   not published here. If they need to move visually later, revisit the URDF/modeling.
+    gripper_left_finger:
+      joint_name: gripper_planar_4
+      multiplier: 0.0
+      offset: 0.0
+
+    gripper_right_finger:
+      joint_name: gripper_planar_5
+      multiplier: 0.0
+      offset: 0.0
 
     XM430:
       device_name: /dev/ttyUSB0
