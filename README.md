@@ -70,45 +70,59 @@ source install/setup.bash
 
 ## Testing Motors
 
+### Feetech (STS/SCS)
+
+```bash
+ros2 launch gripper_ros feetech.launch.py
+```
+See [docs/feetech.md](docs/feetech.md) for parameter details.
+
 ### Dynamixel
 
-- Motor config: `gripper_ros/config/motors/dynamixel.yaml`
-- Gripper config example: `gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`
-- Probe / scan script: `gripper_dynamixel/find_id.py`
-- Motor-only launch:
-
 ```bash
-ros2 launch gripper_ros dyanmixel.launch.py
+source install/setup.bash
+ros2 launch gripper_ros dynamixel.launch.py
 ```
+See [docs/dynamixel.md](docs/dynamixel.md) for motor model presets and parameter details.
 
-Override motor params file:
-
-```bash
-ros2 launch gripper_ros dyanmixel.launch.py params_file:=/abs/path/to/dynamixel.yaml
-```
-
-- Gripper-level launch:
+### Gripper-level launch:
 
 ```bash
+source install/setup.bash
 ros2 launch gripper_ros gripper_soft_two_finger.launch.py
 ```
 
-Override both parameter layers:
+If a USB serial adapter is unplugged and replugged, the device path may change from `/dev/ttyUSB0` to `/dev/ttyUSB1` or similar. Recheck `/dev/ttyUSB*` before assuming the motor settings changed.
+
+### Gripper control
+
+Use the action CLI to send open/close goals (see [docs/action_interface.md](docs/action_interface.md) for details):
+
+To open gripper:
 
 ```bash
-ros2 launch gripper_ros gripper_soft_two_finger.launch.py \
-	motor_params_file:=/abs/path/to/dynamixel.yaml \
-	gripper_params_file:=/abs/path/to/soft_two_finger_dynamixel.yaml
+source install/setup.bash
+ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
 ```
 
-See [docs/dynamixel.md](docs/dynamixel.md) for motor model presets and parameter details.
+To close gripper:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
+```
+
+Read the [action interface docs](docs/action_interface.md) for more details on goal/result/feedback fields and CLI usage.
+
+
+### Polling for Dynamixel motors
 
 Quick ID + baudrate sweep:
 
 ```bash
 python3 src/grippers/gripper_dynamixel/find_id.py \
 	--device /dev/ttyUSB0 \
-	--baudrate-sweep 57600 115200 1000000 2000000 3000000 4000000 \
+	--baudrate-sweep 57600 115200\
 	--scan-start 0 \
 	--scan-end 252 \
 	--no-poll
@@ -125,27 +139,6 @@ python3 src/grippers/gripper_dynamixel/find_id.py \
 	--interval 0.5
 ```
 
-If a USB serial adapter is unplugged and replugged, the device path may change from `/dev/ttyUSB0` to `/dev/ttyUSB1` or similar. Recheck `/dev/ttyUSB*` before assuming the motor settings changed.
-
-### Feetech (STS/SCS)
-
-- Motor config: `gripper_ros/config/motors/feetech.yaml`
-- Launch:
-
-```bash
-ros2 launch gripper_ros feetech.launch.py
-```
-
-Override params file:
-
-```bash
-ros2 launch gripper_ros feetech.launch.py params_file:=/abs/path/to/feetech.yaml
-```
-
-See [docs/feetech.md](docs/feetech.md) for parameter details.
-
-
-## Running grippers
 
 ## Adding new grippers
 

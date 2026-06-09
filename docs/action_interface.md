@@ -59,14 +59,14 @@ ros2 interface show gripper_msgs/action/OpenGripper
 ros2 interface show gripper_msgs/action/CloseGripper
 ```
 
-Send an open goal:
+Send an open gripper:
 
 ```bash
 source install/setup.bash
 ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
 ```
 
-Send a close goal:
+Send a close gripper:
 
 ```bash
 source install/setup.bash

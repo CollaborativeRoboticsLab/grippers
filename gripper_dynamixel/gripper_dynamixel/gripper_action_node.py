@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections.abc import Sequence
 from typing import Callable, Optional, TypeVar
 
 import rclpy
@@ -380,17 +381,25 @@ class DynamixelGripperActionNode(Node):
             return 0.0
         return float(position_ticks - zero) / (float(direction) * ticks_per_rad)
 
+    def _parameter_array(self, name: str) -> list:
+        value = self.get_parameter(name).value
+        if value is None:
+            return []
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+            return list(value)
+        raise RuntimeError(f'{name} must be configured as an array parameter.')
+
     def _joint_state_names(self) -> list[str]:
-        names = self.get_parameter('gripper_joint_state_names').value
+        names = self._parameter_array('gripper_joint_state_names')
         prefix = str(self.get_parameter('gripper_joint_name_prefix').value)
         return [prefix + str(name) for name in names]
 
     def _joint_state_multipliers(self) -> list[float]:
-        values = self.get_parameter('gripper_joint_state_multipliers').value
+        values = self._parameter_array('gripper_joint_state_multipliers')
         return [float(value) for value in values]
 
     def _joint_state_offsets(self) -> list[float]:
-        values = self.get_parameter('gripper_joint_state_offsets').value
+        values = self._parameter_array('gripper_joint_state_offsets')
         return [float(value) for value in values]
 
     def _publish_gripper_joint_states(self, command_position_value: Optional[float]) -> None:
@@ -441,108 +450,9 @@ class DynamixelGripperActionNode(Node):
             current_ticks = self._dxl_with_retry(goal_handle, 'read_present_position', lambda: self._dxl.read_present_position())
             self._publish_gripper_joint_states(self._ticks_to_command_units(current_ticks))
         except Exception as exc:  # noqa: BLE001
-            self.get_logger().warn(f'Failed to publish gripper joint states from feedback: {exc}')
-
-    def _publish_gripper_joint_states_timer_cb(self) -> None:
-        self._publish_gripper_joint_states_from_feedback(goal_handle=None)
-
-    def _goal_cb(self, _goal_request) -> GoalResponse:
-        return GoalResponse.ACCEPT
-
-    def _cancel_cb(self, _goal_handle) -> CancelResponse:
-        return CancelResponse.ACCEPT
-
-    def _resolve_torque(self, requested_torque: float) -> float:
-        if abs(requested_torque) > 0.0:
-            return float(requested_torque)
-        return float(self.get_parameter(self.motor_model + '.default_torque').value)
-
-    def _resolve_use_torque_mode(self, goal_flag: bool) -> bool:
-        # Treat goal_flag as an explicit enable. If false, fall back to parameter default.
-        return bool(goal_flag) or bool(self.get_parameter(self.motor_model + '.use_torque_mode').value)
-
-    def _apply_position(self, goal_handle, target_position: float) -> int:
-        if self._dxl is None:
-            raise RuntimeError('Dynamixel driver is not initialized.')
-
-        target_ticks = self._position_to_ticks(target_position)
-
-        self._dxl_with_retry(goal_handle, 'disable_torque', lambda: self._dxl.disable_torque())
-        self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_position))
-        self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
-        self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
-        return target_ticks
-
-    def _apply_torque(self, goal_handle, torque: float, target_position: Optional[float]) -> Optional[int]:
-        if self._dxl is None:
-            raise RuntimeError('Dynamixel driver is not initialized.')
-
-        # `torque` is treated as a raw Goal Current value by default (model-specific units).
-        goal_current = int(round(torque))
-
-        self._dxl_with_retry(goal_handle, 'disable_torque', lambda: self._dxl.disable_torque())
-
-        if target_position is None:
-            self._dxl_with_retry(goal_handle, 'set_operating_mode', lambda: self._dxl.set_operating_mode(self._dxl.mode_current))
-            self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
-            self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
-            return None
-
-        target_ticks = self._position_to_ticks(float(target_position))
-        self._dxl_with_retry(
-            goal_handle,
-            'set_operating_mode',
-            lambda: self._dxl.set_operating_mode(self._dxl.mode_current_based_position),
-        )
-        self._dxl_with_retry(goal_handle, 'enable_torque', lambda: self._dxl.enable_torque())
-        self._dxl_with_retry(goal_handle, 'write_goal_current', lambda: self._dxl.write_goal_current(goal_current))
-        self._dxl_with_retry(goal_handle, 'write_goal_position', lambda: self._dxl.write_goal_position(target_ticks))
-        return target_ticks
-
-    def _run_motion_loop(self, goal_handle, feedback_cls, *, target_ticks: Optional[int]) -> bool:
-        timeout = float(self.get_parameter(self.motor_model + '.motion_timeout_sec').value)
-        poll_rate = float(self.get_parameter(self.motor_model + '.poll_rate_hz').value)
-        poll_rate = 1.0 if poll_rate <= 0.0 else poll_rate
-        sleep_sec = 1.0 / poll_rate
-        tolerance = int(self.get_parameter(self.motor_model + '.goal_tolerance_ticks').value)
-
-        start_time = time.monotonic()
-        start_pos: Optional[int] = None
-        if self._dxl is not None:
-            try:
-                start_pos = self._dxl.read_present_position()
-            except Exception:  # noqa: BLE001
-                start_pos = None
-
-        while True:
-            if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-                return False
-
-            elapsed = time.monotonic() - start_time
-            if elapsed > timeout:
-                return False
-
-            progress = 0.0
-            if self._dxl is not None and target_ticks is not None:
-                try:
-                    pos = self._dxl.read_present_position()
-                    self._publish_gripper_joint_states(self._ticks_to_command_units(pos))
-                    err = abs(int(target_ticks) - int(pos))
-
-                    if err <= tolerance:
-                        goal_handle.publish_feedback(feedback_cls(progress=1.0))
-                        return True
-
-                    if start_pos is not None:
-                        start_err = max(1, abs(int(target_ticks) - int(start_pos)))
-                        progress = float(max(0.0, min(1.0, 1.0 - (err / float(start_err)))))
-                except Exception:  # noqa: BLE001
-                    progress = 0.0
-            else:
-                # Time-based progress fallback
-                progress = float(max(0.0, min(1.0, elapsed / timeout)))
-                self._publish_gripper_joint_states_from_feedback(goal_handle)
+            self.get_logger().warn(
+                f'Failed to publish gripper joint states from feedback: {type(exc).__name__}: {exc}'
+            )
 
     def _publish_gripper_joint_states_timer_cb(self) -> None:
         self._publish_gripper_joint_states_from_feedback(goal_handle=None)
