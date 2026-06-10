@@ -13,11 +13,6 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
-
-#include <sensor_msgs/msg/joint_state.hpp>
-
-#include <gripper_msgs/action/open_gripper.hpp>
-#include <gripper_msgs/action/close_gripper.hpp>
 #include <gripper_msgs/action/servo_control.hpp>
 
 // Ensure HardwareSerial is defined for the STS driver.
@@ -68,19 +63,6 @@ public:
 		this->declare_parameter<int>("torque_limit_register", static_cast<int>(STSRegisters::TORQUE_LIMIT));
 		this->declare_parameter<bool>("close_default", true);
 
-		// Optional gripper-level joint-state publication. This bridges the articulated
-		// mechanism into robot_state_publisher without hard-coding a specific linkage.
-		this->declare_parameter<bool>("publish_gripper_joint_states", false);
-		this->declare_parameter<std::string>("gripper_joint_state_topic", "joint_states");
-		this->declare_parameter<std::string>("gripper_joint_name_prefix", "");
-		this->declare_parameter<std::vector<std::string>>("gripper_joint_state_names", std::vector<std::string>{});
-		this->declare_parameter<std::vector<double>>("gripper_joint_state_multipliers", std::vector<double>{});
-		this->declare_parameter<std::vector<double>>("gripper_joint_state_offsets", std::vector<double>{});
-		this->declare_parameter<double>("gripper_joint_state_rate_hz", 10.0);
-
-		joint_state_pub_ = this->create_publisher<sensor_msgs::msg::JointState>(
-			this->get_parameter("gripper_joint_state_topic").as_string(), 10);
-
 		if (enable_ros_interface) {
 			servo_control_server_ = rclcpp_action::create_server<ServoControl>(
 				this,
@@ -90,17 +72,6 @@ public:
 				std::bind(&FeetechGripperActionNode::handle_accepted_servo_control, this, std::placeholders::_1));
 		}
 
-		if (this->get_parameter("publish_gripper_joint_states").as_bool()) {
-			const double rate_hz = this->get_parameter("gripper_joint_state_rate_hz").as_double();
-			if (rate_hz > 0.0) {
-				joint_state_timer_ = this->create_wall_timer(
-					std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / rate_hz)),
-					std::bind(&FeetechGripperActionNode::publish_gripper_joint_states_timer_cb, this));
-			} else {
-				publish_gripper_joint_states_from_feedback();
-			}
-		}
-
 		RCLCPP_INFO(this->get_logger(), "Feetech gripper action node ready.");
 	}
 
@@ -108,12 +79,10 @@ public:
 
 
 protected:
-	using OpenGripper = gripper_msgs::action::OpenGripper;
-	using CloseGripper = gripper_msgs::action::CloseGripper;
 	using ServoControl = gripper_msgs::action::ServoControl;
-	using GoalHandleOpen = rclcpp_action::ServerGoalHandle<OpenGripper>;
-	using GoalHandleClose = rclcpp_action::ServerGoalHandle<CloseGripper>;
 	using GoalHandleServoControl = rclcpp_action::ServerGoalHandle<ServoControl>;
+
+	virtual void handle_position_feedback(int) {}
 
 	rclcpp_action::GoalResponse handle_goal_servo_control(
 		const rclcpp_action::GoalUUID &, std::shared_ptr<const ServoControl::Goal>)
@@ -191,90 +160,6 @@ protected:
 			(static_cast<double>(direction) * ticks_per_rad);
 	}
 
-	std::vector<std::string> joint_state_names() const
-	{
-		const auto prefix = this->get_parameter("gripper_joint_name_prefix").as_string();
-		auto names = this->get_parameter("gripper_joint_state_names").as_string_array();
-		for (auto & name : names) {
-			name = prefix + name;
-		}
-		return names;
-	}
-
-	std::vector<double> joint_state_multipliers() const
-	{
-		return this->get_parameter("gripper_joint_state_multipliers").as_double_array();
-	}
-
-	std::vector<double> joint_state_offsets() const
-	{
-		return this->get_parameter("gripper_joint_state_offsets").as_double_array();
-	}
-
-	void publish_gripper_joint_states(double command_position_value)
-	{
-		if (!this->get_parameter("publish_gripper_joint_states").as_bool()) {
-			return;
-		}
-
-		const auto names = joint_state_names();
-		if (names.empty()) {
-			return;
-		}
-
-		const auto multipliers = joint_state_multipliers();
-		auto offsets = joint_state_offsets();
-
-		if (multipliers.size() != names.size()) {
-			RCLCPP_ERROR(
-				this->get_logger(),
-				"publish_gripper_joint_states is enabled but gripper_joint_state_multipliers does not match gripper_joint_state_names in length.");
-			return;
-		}
-
-		if (!offsets.empty() && offsets.size() != names.size()) {
-			RCLCPP_ERROR(
-				this->get_logger(),
-				"publish_gripper_joint_states is enabled but gripper_joint_state_offsets does not match gripper_joint_state_names in length.");
-			return;
-		}
-
-		if (offsets.empty()) {
-			offsets.assign(names.size(), 0.0);
-		}
-
-		sensor_msgs::msg::JointState msg;
-		msg.header.stamp = this->get_clock()->now();
-		msg.name = names;
-		msg.position.reserve(names.size());
-		for (std::size_t index = 0; index < names.size(); ++index) {
-			msg.position.push_back(offsets[index] + (multipliers[index] * command_position_value));
-		}
-
-		joint_state_pub_->publish(msg);
-	}
-
-	void publish_gripper_joint_states_from_feedback()
-	{
-		if (!this->get_parameter("publish_gripper_joint_states").as_bool()) {
-			return;
-		}
-
-		try {
-			ensure_connected();
-			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
-			const int pos = driver_->getCurrentPosition(servo_id);
-			publish_gripper_joint_states(ticks_to_command_units(pos));
-		} catch (const std::exception & e) {
-			RCLCPP_WARN(this->get_logger(), "Failed to publish gripper joint states from feedback: %s", e.what());
-		}
-	}
-
-	void publish_gripper_joint_states_timer_cb()
-	{
-		publish_gripper_joint_states_from_feedback();
-	}
-
 	void ensure_connected()
 	{
 		if (driver_) {
@@ -310,6 +195,13 @@ protected:
 		}
 
 		driver_->setMode(static_cast<byte>(servo_id), STSMode::POSITION);
+	}
+
+	int read_present_position_ticks()
+	{
+		ensure_connected();
+		const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
+		return driver_->getCurrentPosition(servo_id);
 	}
 
 	void apply_torque_limit(int torque_limit_raw)
@@ -351,7 +243,7 @@ protected:
 			}
 
 			const int pos = driver_->getCurrentPosition(servo_id);
-			publish_gripper_joint_states(ticks_to_command_units(pos));
+			handle_position_feedback(pos);
 			const int err = std::abs(target_ticks - pos);
 			if (err <= tolerance) {
 				feedback->progress = 1.0f;
@@ -390,14 +282,13 @@ protected:
 
 		try {
 			ensure_connected();
-			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
 			if (resolve_servo_control_use_torque_mode(goal->torque)) {
 				apply_torque_limit(resolve_torque_limit(goal->torque));
 			}
 
 			const int target_ticks = position_to_ticks(goal->position);
-			const int current_pos = driver_->getCurrentPosition(servo_id);
-			publish_gripper_joint_states(ticks_to_command_units(current_pos));
+			const int current_pos = read_present_position_ticks();
+			handle_position_feedback(current_pos);
 			if (is_at_target(current_pos, target_ticks, tolerance)) {
 				auto result = std::make_shared<ServoControl::Result>();
 				result->success = true;
@@ -445,161 +336,10 @@ protected:
 		}
 	}
 
-	void execute_open(const std::shared_ptr<GoalHandleOpen> goal_handle)
-	{
-		const auto goal = goal_handle->get_goal();
-		const double open_pos = this->get_parameter("open_position").as_double();
-		const int speed = this->get_parameter("speed").as_int();
-		const int tolerance = this->get_parameter("goal_tolerance_ticks").as_int();
-		const double timeout = this->get_parameter("motion_timeout_sec").as_double();
-		double poll_rate = this->get_parameter("poll_rate_hz").as_double();
-		if (poll_rate <= 0.0) {
-			poll_rate = 30.0;
-		}
-
-		try {
-			ensure_connected();
-			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
-			const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
-			if (use_torque_mode) {
-				apply_torque_limit(resolve_torque_limit(goal->torque));
-			}
-
-			const int target_ticks = position_to_ticks(open_pos);
-			const int current_pos = driver_->getCurrentPosition(servo_id);
-			publish_gripper_joint_states(ticks_to_command_units(current_pos));
-			if (is_at_target(current_pos, target_ticks, tolerance)) {
-				auto result = std::make_shared<OpenGripper::Result>();
-				result->success = true;
-				result->message = "Gripper already open.";
-				goal_handle->succeed(result);
-				return;
-			}
-
-			apply_position_target(target_ticks, speed);
-			auto feedback = std::make_shared<OpenGripper::Feedback>();
-
-			const bool ok = run_motion_loop(
-				[goal_handle]() { return goal_handle->is_canceling(); },
-				[goal_handle]() {
-					auto result = std::make_shared<OpenGripper::Result>();
-					result->success = false;
-					result->message = "Open canceled.";
-					goal_handle->canceled(result);
-				},
-				[goal_handle, feedback](float) { goal_handle->publish_feedback(feedback); },
-				target_ticks,
-				current_pos,
-				tolerance,
-				timeout,
-				poll_rate,
-				feedback);
-			if (!ok) {
-				auto result = std::make_shared<OpenGripper::Result>();
-				result->success = false;
-				result->message = "Open timed out.";
-				goal_handle->abort(result);
-				return;
-			}
-
-			auto result = std::make_shared<OpenGripper::Result>();
-			result->success = true;
-			result->message = "Open command sent.";
-			goal_handle->succeed(result);
-		} catch (const std::exception & e) {
-			auto result = std::make_shared<OpenGripper::Result>();
-			result->success = false;
-			result->message = std::string("Open failed: ") + e.what();
-			goal_handle->abort(result);
-		}
-	}
-
-	void execute_close(const std::shared_ptr<GoalHandleClose> goal_handle)
-	{
-		const auto goal = goal_handle->get_goal();
-		const bool close_default = this->get_parameter("close_default").as_bool();
-		const bool close_requested = goal->close || close_default;
-
-		if (!close_requested) {
-			auto result = std::make_shared<CloseGripper::Result>();
-			result->success = true;
-			result->message = "Close goal flag was false; no action taken.";
-			goal_handle->succeed(result);
-			return;
-		}
-
-		const double close_pos = this->get_parameter("close_position").as_double();
-		const int speed = this->get_parameter("speed").as_int();
-		const int tolerance = this->get_parameter("goal_tolerance_ticks").as_int();
-		const double timeout = this->get_parameter("motion_timeout_sec").as_double();
-		double poll_rate = this->get_parameter("poll_rate_hz").as_double();
-		if (poll_rate <= 0.0) {
-			poll_rate = 30.0;
-		}
-
-		try {
-			ensure_connected();
-			const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
-			const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
-			if (use_torque_mode) {
-				apply_torque_limit(resolve_torque_limit(goal->torque));
-			}
-
-			const int target_ticks = position_to_ticks(close_pos);
-			const int current_pos = driver_->getCurrentPosition(servo_id);
-			publish_gripper_joint_states(ticks_to_command_units(current_pos));
-			if (is_at_target(current_pos, target_ticks, tolerance)) {
-				auto result = std::make_shared<CloseGripper::Result>();
-				result->success = true;
-				result->message = "Gripper already closed.";
-				goal_handle->succeed(result);
-				return;
-			}
-
-			apply_position_target(target_ticks, speed);
-			auto feedback = std::make_shared<CloseGripper::Feedback>();
-
-			const bool ok = run_motion_loop(
-				[goal_handle]() { return goal_handle->is_canceling(); },
-				[goal_handle]() {
-					auto result = std::make_shared<CloseGripper::Result>();
-					result->success = false;
-					result->message = "Close canceled.";
-					goal_handle->canceled(result);
-				},
-				[goal_handle, feedback](float) { goal_handle->publish_feedback(feedback); },
-				target_ticks,
-				current_pos,
-				tolerance,
-				timeout,
-				poll_rate,
-				feedback);
-			if (!ok) {
-				auto result = std::make_shared<CloseGripper::Result>();
-				result->success = false;
-				result->message = "Close timed out.";
-				goal_handle->abort(result);
-				return;
-			}
-
-			auto result = std::make_shared<CloseGripper::Result>();
-			result->success = true;
-			result->message = "Close command sent.";
-			goal_handle->succeed(result);
-		} catch (const std::exception & e) {
-			auto result = std::make_shared<CloseGripper::Result>();
-			result->success = false;
-			result->message = std::string("Close failed: ") + e.what();
-			goal_handle->abort(result);
-		}
-	}
-
 private:
 
 	std::unique_ptr<LinuxSerial> serial_;
 	std::unique_ptr<STSServoDriver> driver_;
-	rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr joint_state_pub_;
-	rclcpp::TimerBase::SharedPtr joint_state_timer_;
 
 	rclcpp_action::Server<ServoControl>::SharedPtr servo_control_server_;
 };

@@ -9,7 +9,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-find_package(sensor_msgs REQUIRED)
 find_package(gripper_msgs REQUIRED)
 
 add_executable(gripper_feetech_action_node
@@ -24,7 +23,6 @@ target_include_directories(gripper_feetech_action_node PUBLIC
 ament_target_dependencies(gripper_feetech_action_node
   rclcpp
   rclcpp_action
-  sensor_msgs
   gripper_msgs
 )
 
@@ -32,7 +30,6 @@ ament_export_include_directories(include)
 ament_export_dependencies(
   rclcpp
   rclcpp_action
-  sensor_msgs
   gripper_msgs
 )
 

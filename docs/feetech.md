@@ -5,10 +5,16 @@ This workspace includes a ROS 2 **action server** for direct Feetech STS/SCS-sty
 
 - Node: `gripper_feetech_action_node` (package: `gripper_servo_feetech`)
 - Launch: `gripper_ros/launch/feetech.launch.py`
-- Main config: `gripper_ros/config/feetech.yaml`
+- Main config: `gripper_ros/config/servos/feetech.yaml`
+
+The gripper-level Feetech wrapper entrypoint is:
+
+- Node: `gripper_feetech_test_node` (package: `gripper_feetech_test`)
+- Launch: `gripper_ros/launch/gripper_feetech_test.launch.py`
+- Gripper config: `gripper_ros/config/grippers/feetech_test.yaml`
 
 The low-level node exposes `/servo_control`.
-The gripper-level `gripper_feetech_test` wrapper exposes `/open_gripper` and `/close_gripper` while reusing the same motor logic.
+The gripper-level `gripper_feetech_test` wrapper exposes `/open_gripper` and `/close_gripper` while owning gripper articulation publication.
 
 The low-level action details are documented in [Servo Action Interface](./servo_action_interface.md).
 The gripper wrapper action details are documented in [Gripper Action Interface](./gripper_action_interface.md).
@@ -41,7 +47,7 @@ Notes:
 
 ### 1) Configure
 
-Edit `gripper_ros/config/feetech.yaml`:
+Edit `gripper_ros/config/servos/feetech.yaml`:
 
 - `device_name`: e.g. `/dev/ttyUSB0`
 - `baudrate`: e.g. `1000000` (common for STS)
@@ -55,10 +61,24 @@ Edit `gripper_ros/config/feetech.yaml`:
 ros2 launch gripper_ros feetech.launch.py
 ```
 
+Launch the gripper-level wrapper:
+
+```bash
+ros2 launch gripper_ros gripper_feetech_test.launch.py
+```
+
 Override the config path if needed:
 
 ```bash
 ros2 launch gripper_ros feetech.launch.py params_file:=/abs/path/to/feetech.yaml
+```
+
+Override the gripper-level config paths if needed:
+
+```bash
+ros2 launch gripper_ros gripper_feetech_test.launch.py \
+	motor_params_file:=/abs/path/to/feetech.yaml \
+	gripper_params_file:=/abs/path/to/feetech_test.yaml
 ```
 
 ## Sending actions
@@ -72,6 +92,19 @@ ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position
 
 See [servo_action_interface.md](./servo_action_interface.md) for low-level servo action examples.
 See [gripper_action_interface.md](./gripper_action_interface.md) for gripper-level open/close examples.
+
+### Gripper-level articulation
+
+The low-level `gripper_servo_feetech` package no longer declares or publishes gripper articulation state.
+That ownership now belongs to `gripper_feetech_test` via these wrapper parameters:
+
+- `publish_gripper_joint_states`
+- `gripper_joint_state_topic`
+- `gripper_joint_name_prefix`
+- `gripper_joint_state_names`
+- `gripper_joint_state_multipliers`
+- `gripper_joint_state_offsets`
+- `gripper_joint_state_rate_hz`
 
 ## Parameter reference
 

@@ -1,4 +1,4 @@
-gripper_feetech_action_node:
+/**:
   ros__parameters:
     # Transport
     device_name: /dev/ttyUSB0

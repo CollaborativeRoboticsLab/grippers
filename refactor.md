@@ -58,7 +58,7 @@ Interpretation for implementation:
 
 ### Phase 3 — stabilize gripper-level wrappers
 - [x] `gripper_two_fingers`: keep only gripper-level semantics, articulation publication, and open/close orchestration.
-- [ ] `gripper_feetech_test`: keep only gripper-level semantics, articulation publication, and open/close orchestration.
+- [x] `gripper_feetech_test`: keep only gripper-level semantics, articulation publication, and open/close orchestration.
 - [x] Add explicit idempotent action handling for already-open / already-closed states.
 - [~] Add or refactor TF publication so articulation ownership stays in the gripper-level packages.
 
@@ -125,6 +125,14 @@ Interpretation for implementation:
 - `gripper_servo_feetech` now exposes low-level `servo_control` instead of low-level `open_gripper` / `close_gripper`.
 - `gripper_feetech_test` now owns the gripper-level `open_gripper` / `close_gripper` actions while reusing the same Feetech motor logic.
 - Added `gripper_msgs/action/ServoControl.action` as the shared low-level servo command contract.
+
+## Completed in the Feetech articulation ownership pass
+
+- Removed gripper joint-state publication parameters and behavior from `gripper_servo_feetech`.
+- Moved Feetech open/close orchestration and articulation publication into `gripper_feetech_test`.
+- Added `gripper_ros/config/grippers/feetech_test.yaml` as the gripper-level Feetech overlay.
+- Added `gripper_ros/launch/gripper_feetech_test.launch.py` as the gripper-level Feetech launch entrypoint.
+- Switched `gripper_ros/config/servos/feetech.yaml` to wildcard `/**` so both low-level and gripper-level Feetech nodes can reuse one motor config.
 
 ## Current verified state before hardware tuning
 
