@@ -86,4 +86,4 @@ If simulated motion is reversed relative to hardware, adjust only the `joint_ope
 
 ## TF Tree
 
-See [tf-tree.md](./tf-tree.md) for the current TF-tree note and image.
+![TF tree](./tf-tree.png)

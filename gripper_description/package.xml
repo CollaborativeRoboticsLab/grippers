@@ -3,7 +3,7 @@
 <package format="3">
   <name>gripper_description</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>URDF/xacro descriptions and meshes for the gripper assemblies.</description>
   <maintainer email="kalanaratnayake95@gmail.com">ubuntu</maintainer>
   <license>TODO: License declaration</license>
 

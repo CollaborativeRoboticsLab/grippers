@@ -11,6 +11,8 @@ ROS 2 gripper drivers that expose a **common action-based API** for low-level se
 - `gripper_feetech_test`: gripper-level Feetech test wrapper (C++).
 - `gripper_ros`: launch files + centralized motor/gripper parameter YAMLs.
 
+No superseded source package directories remain in this repository. The active package set above is the current supported stack.
+
 ## Action API
 
 This workspace uses two action layers:
@@ -95,6 +97,8 @@ source install/setup.bash
 ros2 launch gripper_ros gripper_soft_two_fingers.launch.py
 ```
 
+This is the independent runtime launch for the two-finger Dynamixel gripper node.
+
 ### Gripper URDF simulation in RViz:
 
 ```bash
@@ -102,7 +106,8 @@ source install/setup.bash
 ros2 launch gripper_ros gripper_sim.launch.py model:=two-finger-gripper-standalone
 ```
 
-This starts the gripper URDF only in `robot_state_publisher`, `joint_state_publisher_gui`, and `rviz2` so you can calibrate the model without hardware.
+This starts the gripper URDF in `robot_state_publisher` and `rviz2` only.
+Run it alongside `gripper_soft_two_fingers.launch.py` when you want RViz to reflect live `/joint_states` from the gripper node.
 
 If a USB serial adapter is unplugged and replugged, the device path may change from `/dev/ttyUSB0` to `/dev/ttyUSB1` or similar. Recheck `/dev/ttyUSB*` before assuming the motor settings changed.
 
@@ -126,6 +131,26 @@ ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: t
 
 Read the [gripper action interface docs](docs/gripper_action_interface.md) for more details on open/close goal fields and CLI usage.
 Read the [servo action interface docs](docs/servo_action_interface.md) for direct low-level servo commands.
+
+### Current two-finger articulation model
+
+The current two-finger Dynamixel stack uses two public slider joints:
+
+- `gripper_planar_4`
+- `gripper_planar_5`
+
+`gripper_two_fingers_node` maps servo feedback into those joints using per-finger `joint_open_position` and `joint_close_position` values from `gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`.
+`robot_state_publisher` then expands the moving TF tree from those joint states.
+
+## Refactor status
+
+The package-role refactor is complete:
+
+- low-level servo packages own `/servo_control`
+- gripper-level wrapper packages own `/open_gripper` and `/close_gripper`
+- the two-finger Dynamixel path uses the slider-joint model with separate hardware and visualization launches
+
+See [refactor.md](./refactor.md) for the maintained refactor record.
 
 
 ### Polling for Dynamixel motors

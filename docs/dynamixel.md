@@ -19,8 +19,8 @@ For the current two-finger wrapper, the preferred articulation model is now:
 
 - one **left finger** displacement parameter block
 - one **right finger** displacement parameter block
-- two dynamic support-connectivity TF bridges published by `gripper_two_fingers`
-- `robot_state_publisher` handling the rest of the tree
+- `gripper_two_fingers` publishing the two slider-joint states
+- `robot_state_publisher` handling the moving TF tree from those joint states
 
 The low-level action details are documented in [Servo Action Interface](./servo_action_interface.md).
 The gripper wrapper action details are documented in [Gripper Action Interface](./gripper_action_interface.md).
@@ -75,39 +75,32 @@ Instead, use a per-finger mapping:
 ```yaml
 gripper_left_finger:
   joint_name: gripper_planar_4
-  multiplier: 0.0
-  offset: 0.0
-  support_parent_frame: gripper_mgnr09r315hm
-  support_child_frame: gripper_gripper_support_1
-  support_origin_xyz: [0.129112, -0.00361501, -0.0045]
-  support_axis_xyz: [-1.0, 0.0, 0.0]
+  joint_open_position: -0.045
+  joint_close_position: 0.0
 
 gripper_right_finger:
   joint_name: gripper_planar_5
-  multiplier: 0.0
-  offset: 0.0
-  support_parent_frame: gripper_mgnr09r315hm_1
-  support_child_frame: gripper_gripper_support
-  support_origin_xyz: [0.0189804, -0.0025, 0.0045]
-  support_axis_xyz: [1.0, 0.0, 0.0]
+  joint_open_position: -0.045
+  joint_close_position: 0.0
 ```
 
 Interpretation:
 
 - the measured motor position is converted into command units
-- that scalar is mapped into left/right finger support displacement with `multiplier` and `offset`
-- the two support-connectivity TF bridges are then derived from those two values
-- the support bridge parent/child frame pairing and origin/axis are also configurable per finger
+- that scalar is mapped into left/right slider travel using the configured servo open/close range
+- the resulting slider `joint_states` are consumed by `robot_state_publisher`
 
-The current URDF-backed default pairing is:
+The current URDF-backed public articulation joints are:
 
-- `gripper_planar_4 -> gripper_mgnr09r315hm -> gripper_gripper_support_1`
-- `gripper_planar_5 -> gripper_mgnr09r315hm_1 -> gripper_gripper_support`
+- `gripper_planar_4`
+- `gripper_planar_5`
 
-If hardware proves those support children are swapped, update only:
+If simulated motion is inverted relative to hardware, update only:
 
-- `gripper_left_finger.support_child_frame`
-- `gripper_right_finger.support_child_frame`
+- `gripper_left_finger.joint_open_position`
+- `gripper_left_finger.joint_close_position`
+- `gripper_right_finger.joint_open_position`
+- `gripper_right_finger.joint_close_position`
 
 in the runtime YAML instead of patching the Python node.
 
@@ -158,7 +151,7 @@ Launch via `gripper_ros`:
 
 ```bash
 source install/setup.bash
-ros2 launch gripper_ros dyanmixel.launch.py
+ros2 launch gripper_ros dynamixel.launch.py
 ```
 
 Launch the gripper-level two-finger wrapper:
@@ -171,15 +164,15 @@ ros2 launch gripper_ros gripper_soft_two_fingers.launch.py
 That wrapper can publish:
 
 - gripper-level `joint_states`
-- two dynamic TF bridges for support connectivity
+- slider-joint positions for `gripper_planar_4` and `gripper_planar_5`
 
-while `robot_state_publisher` handles the rest of the URDF tree.
+while `robot_state_publisher` handles the moving TF tree.
 
 Override the params file if needed:
 
 ```bash
 source install/setup.bash
-ros2 launch gripper_ros dyanmixel.launch.py params_file:=/abs/path/to/dynamixel.yaml
+ros2 launch gripper_ros dynamixel.launch.py params_file:=/abs/path/to/dynamixel.yaml
 ```
 
 ## Sending actions
@@ -274,40 +267,24 @@ The script prints `model`, `operating_mode`, `torque_enable`, `hardware_error`, 
 ### Gripper-level two-finger articulation
 
 - `publish_gripper_joint_states` (bool)
-- `publish_support_connectivity_tf` (bool): publish the two support-connectivity TF bridges
 - `gripper_joint_state_topic` (string)
 - `gripper_joint_name_prefix` (string)
-- `gripper_frame_prefix` (string)
 
 Preferred parameters:
 
 - `gripper_left_finger.joint_name`
-- `gripper_left_finger.multiplier`
-- `gripper_left_finger.offset`
-- `gripper_left_finger.support_parent_frame`
-- `gripper_left_finger.support_child_frame`
-- `gripper_left_finger.support_origin_xyz`
-- `gripper_left_finger.support_axis_xyz`
+- `gripper_left_finger.joint_open_position`
+- `gripper_left_finger.joint_close_position`
 - `gripper_right_finger.joint_name`
-- `gripper_right_finger.multiplier`
-- `gripper_right_finger.offset`
-- `gripper_right_finger.support_parent_frame`
-- `gripper_right_finger.support_child_frame`
-- `gripper_right_finger.support_origin_xyz`
-- `gripper_right_finger.support_axis_xyz`
-
-Legacy fallback parameters still supported in code:
-
-- `gripper_joint_state_names`
-- `gripper_joint_state_multipliers`
-- `gripper_joint_state_offsets`
+- `gripper_right_finger.joint_open_position`
+- `gripper_right_finger.joint_close_position`
 
 The preferred current setup is to use only:
 
 - `gripper_planar_4`
 - `gripper_planar_5`
 
-and **not** publish `gripper_revolute_*` from the node for now.
+and let `robot_state_publisher` expand the rest of the moving tree from those joint states.
 
 Important caveat: if `gripper_revolute_*` are not published, `robot_state_publisher`
 will not make them move automatically unless the URDF models those relationships explicitly

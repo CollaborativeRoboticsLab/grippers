@@ -23,7 +23,7 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument(
                 'params_file',
                 default_value=default_params,
-                description='Path to Feetech gripper parameter YAML.',
+                description='Path to the low-level Feetech servo parameter YAML.',
             ),
             gripper_node,
         ]

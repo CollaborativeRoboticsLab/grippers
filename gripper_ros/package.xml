@@ -3,7 +3,7 @@
 <package format="3">
   <name>gripper_ros</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Launch files and shared parameter overlays for the gripper stack.</description>
   <maintainer email="kalanaratnayake95@gmail.com">kalana</maintainer>
   <license>TODO: License declaration</license>
 
@@ -13,7 +13,6 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
-  <exec_depend>joint_state_publisher_gui</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>gripper_description</exec_depend>
   <exec_depend>gripper_servo_dynamixel</exec_depend>

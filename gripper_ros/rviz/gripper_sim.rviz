@@ -131,14 +131,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_link__1__loop_closure:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-        gripper_link__2__loop_closure:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
         gripper_mgnr09r315hm:
           Alpha: 1
           Show Axes: false
@@ -149,26 +141,6 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_planar_4:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: false
-        gripper_planar_4_1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: false
-        gripper_planar_5:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: false
-        gripper_planar_5_1:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: false
         gripper_root:
           Alpha: 1
           Show Axes: false

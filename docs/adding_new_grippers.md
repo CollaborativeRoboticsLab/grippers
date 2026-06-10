@@ -94,19 +94,14 @@ Important fields in a gripper overlay:
 Preferred current articulation model for the two-finger gripper:
 
 - `gripper_left_finger.joint_name`
-- `gripper_left_finger.multiplier`
-- `gripper_left_finger.offset`
+- `gripper_left_finger.joint_open_position`
+- `gripper_left_finger.joint_close_position`
 - `gripper_right_finger.joint_name`
-- `gripper_right_finger.multiplier`
-- `gripper_right_finger.offset`
+- `gripper_right_finger.joint_open_position`
+- `gripper_right_finger.joint_close_position`
 
-Legacy fallback model still supported in code:
-
-- `gripper_joint_state_names`
-- `gripper_joint_state_multipliers`
-- `gripper_joint_state_offsets`
-
-For the current single-motor setup, one motor position is mapped into one or more gripper joints with multipliers and offsets.
+For the current single-motor setup, one motor position is mapped into one or more gripper joints.
+For the current two-finger slider model, the preferred path is direct open/close endpoint mapping rather than raw multipliers.
 
 For the current coupled two-finger mechanism, the preferred interpretation is:
 
@@ -114,9 +109,10 @@ For the current coupled two-finger mechanism, the preferred interpretation is:
 - right finger displacement from center
 - each side approximately equal to half of the total finger spacing change
 
-For the current preferred setup, use only the primary support displacement joints
-(`gripper_planar_4` and `gripper_planar_5`) unless hardware testing shows that the
-secondary planar joints must also be driven explicitly.
+For the current preferred setup, use only the two public slider joints:
+
+- `gripper_planar_4`
+- `gripper_planar_5`
 
 For a future multi-motor gripper, this part will need to evolve. The likely direction is one of:
 
@@ -180,17 +176,19 @@ If the TF tree is broken at a moving joint, the most common cause is missing `jo
 
 For the current two-finger Dynamixel wrapper, the intended architecture is:
 
-- `robot_state_publisher` for most transforms
-- explicit dynamic TF publication in `gripper_two_fingers` for the two support-connectivity bridges
+- `gripper_two_fingers` publishing the slider `joint_states`
+- `robot_state_publisher` expanding those into the moving TF tree
 
 Do not assume that omitted revolute joints will move automatically unless the URDF explicitly models that coupling.
 
 If the TF tree is connected but the motion is visually wrong, adjust:
 
-- `gripper_joint_state_multipliers`
-- `gripper_joint_state_offsets`
 - `open_position`
 - `close_position`
+- `gripper_left_finger.joint_open_position`
+- `gripper_left_finger.joint_close_position`
+- `gripper_right_finger.joint_open_position`
+- `gripper_right_finger.joint_close_position`
 
 ## 7. Checklist
 

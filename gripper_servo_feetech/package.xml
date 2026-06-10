@@ -3,7 +3,7 @@
 <package format="3">
   <name>gripper_servo_feetech</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Low-level Feetech servo driver and servo_control action node.</description>
   <maintainer email="kalanaratnayake95@gmail.com">kalana</maintainer>
   <license>TODO: License declaration</license>
 

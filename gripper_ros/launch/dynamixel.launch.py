@@ -24,7 +24,7 @@ def generate_launch_description() -> LaunchDescription:
 			DeclareLaunchArgument(
 				'params_file',
 				default_value=default_params,
-				description='Path to Dynamixel gripper parameter YAML.',
+				description='Path to the low-level Dynamixel servo parameter YAML.',
 			),
 			gripper_node,
 		]

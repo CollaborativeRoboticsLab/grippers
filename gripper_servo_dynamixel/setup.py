@@ -18,7 +18,7 @@ setup(
     zip_safe=True,
     maintainer='kalana',
     maintainer_email='kalanaratnayake95@gmail.com',
-    description='TODO: Package description',
+    description='Low-level Dynamixel servo driver and servo_control action node.',
     license='TODO: License declaration',
     extras_require={
         'test': [

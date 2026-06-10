@@ -1,15 +1,11 @@
 from __future__ import annotations
-from collections.abc import Sequence
 import math
 from typing import Optional
 
 import rclpy
-from geometry_msgs.msg import TransformStamped
 from gripper_msgs.action import CloseGripper, OpenGripper
 from rclpy.action import ActionServer
-from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
-from tf2_ros import TransformBroadcaster
 
 from gripper_servo_dynamixel.gripper_action_node import DynamixelServoActionNode
 
@@ -42,37 +38,19 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self.declare_parameter('publish_gripper_joint_states', False)
         self.declare_parameter('gripper_joint_state_topic', 'joint_states')
         self.declare_parameter('gripper_joint_name_prefix', '')
-        self.declare_parameter('gripper_frame_prefix', '')
         self.declare_parameter('gripper_left_finger.joint_name', '')
-        self.declare_parameter('gripper_left_finger.multiplier', 0.0)
-        self.declare_parameter('gripper_left_finger.offset', 0.0)
         self.declare_parameter('gripper_left_finger.joint_open_position', float('nan'))
         self.declare_parameter('gripper_left_finger.joint_close_position', float('nan'))
-        self.declare_parameter('gripper_left_finger.support_parent_frame', 'gripper_mgnr09r315hm')
-        self.declare_parameter('gripper_left_finger.support_child_frame', 'gripper_gripper_support_1')
-        self.declare_parameter('gripper_left_finger.support_origin_xyz', [0.129112, -0.00361501, -0.0045])
-        self.declare_parameter('gripper_left_finger.support_axis_xyz', [-1.0, 0.0, 0.0])
         self.declare_parameter('gripper_right_finger.joint_name', '')
-        self.declare_parameter('gripper_right_finger.multiplier', 0.0)
-        self.declare_parameter('gripper_right_finger.offset', 0.0)
         self.declare_parameter('gripper_right_finger.joint_open_position', float('nan'))
         self.declare_parameter('gripper_right_finger.joint_close_position', float('nan'))
-        self.declare_parameter('gripper_right_finger.support_parent_frame', 'gripper_mgnr09r315hm_1')
-        self.declare_parameter('gripper_right_finger.support_child_frame', 'gripper_gripper_support')
-        self.declare_parameter('gripper_right_finger.support_origin_xyz', [0.0189804, -0.0025, 0.0045])
-        self.declare_parameter('gripper_right_finger.support_axis_xyz', [1.0, 0.0, 0.0])
-        self.declare_parameter('gripper_joint_state_names', Parameter.Type.STRING_ARRAY)
-        self.declare_parameter('gripper_joint_state_multipliers', Parameter.Type.DOUBLE_ARRAY)
-        self.declare_parameter('gripper_joint_state_offsets', Parameter.Type.DOUBLE_ARRAY)
         self.declare_parameter('gripper_joint_state_rate_hz', 10.0)
-        self.declare_parameter('publish_support_connectivity_tf', False)
 
         self._joint_state_pub = self.create_publisher(
             JointState,
             str(self.get_parameter('gripper_joint_state_topic').value),
             10,
         )
-        self._tf_broadcaster = TransformBroadcaster(self)
         self._joint_state_timer = None
 
         if bool(self.get_parameter('publish_gripper_joint_states').value):
@@ -84,48 +62,11 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
         self.get_logger().info('Two-finger gripper node ready.')
 
-    def _parameter_array(self, name: str) -> list:
-        value = self.get_parameter(name).value
-        if value is None:
-            return []
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
-            return list(value)
-        raise RuntimeError(f'{name} must be configured as an array parameter.')
-
-    def _joint_state_names(self) -> list[str]:
-        names = self._parameter_array('gripper_joint_state_names')
-        prefix = str(self.get_parameter('gripper_joint_name_prefix').value)
-        return [prefix + str(name) for name in names]
-
-    def _joint_state_multipliers(self) -> list[float]:
-        return [float(value) for value in self._parameter_array('gripper_joint_state_multipliers')]
-
-    def _joint_state_offsets(self) -> list[float]:
-        return [float(value) for value in self._parameter_array('gripper_joint_state_offsets')]
-
-    def _frame_prefix(self) -> str:
-        explicit_prefix = str(self.get_parameter('gripper_frame_prefix').value)
-        if explicit_prefix:
-            return explicit_prefix
-        return str(self.get_parameter('gripper_joint_name_prefix').value)
-
     def _prefixed_joint_name(self, base_name: str) -> str:
         prefix = str(self.get_parameter('gripper_joint_name_prefix').value)
         if not prefix or base_name.startswith(prefix):
             return base_name
         return prefix + base_name
-
-    def _prefixed_frame_name(self, base_name: str) -> str:
-        prefix = self._frame_prefix()
-        if not prefix or base_name.startswith(prefix):
-            return base_name
-        return prefix + base_name
-
-    def _parameter_float_triplet(self, name: str) -> tuple[float, float, float]:
-        values = self._parameter_array(name)
-        if len(values) != 3:
-            raise RuntimeError(f'{name} must contain exactly three numeric values.')
-        return (float(values[0]), float(values[1]), float(values[2]))
 
     def _finger_configs(self) -> list[dict[str, float | str]]:
         configs: list[dict[str, float | str]] = []
@@ -139,18 +80,8 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
                 {
                     'side': side,
                     'joint_name': self._prefixed_joint_name(joint_name),
-                    'multiplier': float(self.get_parameter(f'{base}.multiplier').value),
-                    'offset': float(self.get_parameter(f'{base}.offset').value),
                     'joint_open_position': float(self.get_parameter(f'{base}.joint_open_position').value),
                     'joint_close_position': float(self.get_parameter(f'{base}.joint_close_position').value),
-                    'support_parent_frame': self._prefixed_frame_name(
-                        str(self.get_parameter(f'{base}.support_parent_frame').value)
-                    ),
-                    'support_child_frame': self._prefixed_frame_name(
-                        str(self.get_parameter(f'{base}.support_child_frame').value)
-                    ),
-                    'support_origin_xyz': self._parameter_float_triplet(f'{base}.support_origin_xyz'),
-                    'support_axis_xyz': self._parameter_float_triplet(f'{base}.support_axis_xyz'),
                 }
             )
 
@@ -161,153 +92,40 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
         joint_open = float(config['joint_open_position'])
         joint_close = float(config['joint_close_position'])
-        if not math.isnan(joint_open) and not math.isnan(joint_close):
-            command_open = float(self._servo_config.open_position)
-            command_close = float(self._servo_config.close_position)
-            if math.isclose(command_close, command_open):
-                return joint_open
+        if math.isnan(joint_open) or math.isnan(joint_close):
+            joint_name = str(config['joint_name'])
+            raise RuntimeError(
+                f'{joint_name} requires both joint_open_position and joint_close_position to be configured.'
+            )
 
-            alpha = (scalar - command_open) / (command_close - command_open)
-            alpha = max(0.0, min(1.0, alpha))
-            return joint_open + (alpha * (joint_close - joint_open))
+        command_open = float(self._servo_config.open_position)
+        command_close = float(self._servo_config.close_position)
+        if math.isclose(command_close, command_open):
+            return joint_open
 
-        return float(config['offset']) + (float(config['multiplier']) * scalar)
+        alpha = (scalar - command_open) / (command_close - command_open)
+        alpha = max(0.0, min(1.0, alpha))
+        return joint_open + (alpha * (joint_close - joint_open))
 
-    def _connectivity_joint_names(self) -> set[str]:
+    def _joint_state_entries(self, command_position_value: Optional[float]) -> list[tuple[str, float]]:
         finger_configs = self._finger_configs()
-        if finger_configs:
-            return {str(config['joint_name']) for config in finger_configs}
-
-        return {
-            self._prefixed_joint_name('gripper_planar_4'),
-            self._prefixed_joint_name('gripper_planar_4_1'),
-            self._prefixed_joint_name('gripper_planar_4_2'),
-            self._prefixed_joint_name('gripper_planar_5'),
-            self._prefixed_joint_name('gripper_planar_5_1'),
-            self._prefixed_joint_name('gripper_planar_5_2'),
-        }
-
-    def _legacy_joint_state_entries(self, command_position_value: Optional[float], *, include_connectivity: bool = True) -> list[tuple[str, float]]:
-        names = self._joint_state_names()
-        if not names:
-            return []
-
-        multipliers = self._joint_state_multipliers()
-        offsets = self._joint_state_offsets()
-        if len(multipliers) != len(names):
-            raise RuntimeError(
-                'publish_gripper_joint_states is enabled but gripper_joint_state_multipliers does not match gripper_joint_state_names in length.'
-            )
-
-        if offsets and len(offsets) != len(names):
-            raise RuntimeError(
-                'publish_gripper_joint_states is enabled but gripper_joint_state_offsets does not match gripper_joint_state_names in length.'
-            )
-
-        if not offsets:
-            offsets = [0.0] * len(names)
-
-        scalar = 0.0 if command_position_value is None else float(command_position_value)
-        skipped = self._connectivity_joint_names() if not include_connectivity else set()
         entries: list[tuple[str, float]] = []
-        for name, multiplier, offset in zip(names, multipliers, offsets):
-            if name in skipped:
-                continue
-            entries.append((name, float(offset) + (float(multiplier) * scalar)))
+        for config in finger_configs:
+            joint_name = str(config['joint_name'])
+            entries.append(
+                (
+                    joint_name,
+                    self._finger_joint_position(config, command_position_value),
+                )
+            )
         return entries
-
-    def _joint_state_entries(self, command_position_value: Optional[float], *, include_connectivity: bool = True) -> list[tuple[str, float]]:
-        finger_configs = self._finger_configs()
-        if finger_configs:
-            skipped = self._connectivity_joint_names() if not include_connectivity else set()
-            entries: list[tuple[str, float]] = []
-            for config in finger_configs:
-                joint_name = str(config['joint_name'])
-                if joint_name in skipped:
-                    continue
-                entries.append(
-                    (
-                        joint_name,
-                        self._finger_joint_position(config, command_position_value),
-                    )
-                )
-            return entries
-
-        return self._legacy_joint_state_entries(command_position_value, include_connectivity=include_connectivity)
-
-    def _joint_state_position_map(self, command_position_value: Optional[float]) -> dict[str, float]:
-        return dict(self._joint_state_entries(command_position_value, include_connectivity=True))
-
-    def _publish_support_connectivity_tf(self, command_position_value: Optional[float]) -> None:
-        if not bool(self.get_parameter('publish_support_connectivity_tf').value):
-            return
-
-        positions = self._joint_state_position_map(command_position_value)
-
-        finger_configs = self._finger_configs()
-        if finger_configs:
-            specs: list[dict[str, str | tuple[float, float, float]]] = []
-            for config in finger_configs:
-                specs.append(
-                    {
-                        'joint_name': str(config['joint_name']),
-                        'parent': str(config['support_parent_frame']),
-                        'child': str(config['support_child_frame']),
-                        'origin': tuple(config['support_origin_xyz']),
-                        'axis': tuple(config['support_axis_xyz']),
-                    }
-                )
-        else:
-            specs = [
-                {
-                    'joint_name': self._prefixed_joint_name('gripper_planar_4'),
-                    'parent': self._prefixed_frame_name('gripper_mgnr09r315hm'),
-                    'child': self._prefixed_frame_name('gripper_gripper_support_1'),
-                    'origin': (0.129112, -0.00361501, -0.0045),
-                    'axis': (-1.0, 0.0, 0.0),
-                },
-                {
-                    'joint_name': self._prefixed_joint_name('gripper_planar_5'),
-                    'parent': self._prefixed_frame_name('gripper_mgnr09r315hm_1'),
-                    'child': self._prefixed_frame_name('gripper_gripper_support'),
-                    'origin': (0.0189804, -0.0025, 0.0045),
-                    'axis': (1.0, 0.0, 0.0),
-                },
-            ]
-
-        stamp = self.get_clock().now().to_msg()
-        transforms: list[TransformStamped] = []
-        for spec in specs:
-            q = float(positions.get(spec['joint_name'], 0.0))
-
-            tx = spec['origin'][0] + (spec['axis'][0] * q)
-            ty = spec['origin'][1] + (spec['axis'][1] * q)
-            tz = spec['origin'][2] + (spec['axis'][2] * q)
-
-            tf_msg = TransformStamped()
-            tf_msg.header.stamp = stamp
-            tf_msg.header.frame_id = spec['parent']
-            tf_msg.child_frame_id = spec['child']
-            tf_msg.transform.translation.x = tx
-            tf_msg.transform.translation.y = ty
-            tf_msg.transform.translation.z = tz
-            tf_msg.transform.rotation.x = 0.0
-            tf_msg.transform.rotation.y = 0.0
-            tf_msg.transform.rotation.z = 0.0
-            tf_msg.transform.rotation.w = 1.0
-            transforms.append(tf_msg)
-
-        self._tf_broadcaster.sendTransform(transforms)
 
     def _publish_gripper_joint_states(self, command_position_value: Optional[float]) -> None:
         if not bool(self.get_parameter('publish_gripper_joint_states').value):
             return
 
         try:
-            entries = self._joint_state_entries(
-                command_position_value,
-                include_connectivity=not bool(self.get_parameter('publish_support_connectivity_tf').value),
-            )
+            entries = self._joint_state_entries(command_position_value)
         except RuntimeError as exc:
             self.get_logger().error(str(exc))
             return
@@ -327,14 +145,12 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
         if self._servo is None:
             self._publish_gripper_joint_states(command_position_value=0.0)
-            self._publish_support_connectivity_tf(command_position_value=0.0)
             return
 
         try:
             current_ticks = self._read_present_position()
             command_units = self._servo.ticks_to_command_units(current_ticks)
             self._publish_gripper_joint_states(command_units)
-            self._publish_support_connectivity_tf(command_units)
         except Exception as exc:  # noqa: BLE001
             self.get_logger().warning(
                 f'Failed to publish gripper joint states from feedback: {type(exc).__name__}: {exc}'
@@ -348,11 +164,9 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             return
         command_units = self._servo.ticks_to_command_units(current_ticks)
         self._publish_gripper_joint_states(command_units)
-        self._publish_support_connectivity_tf(command_units)
 
     def _handle_servo_unavailable_feedback(self) -> None:
         self._publish_gripper_joint_states(command_position_value=0.0)
-        self._publish_support_connectivity_tf(command_position_value=0.0)
 
     def _log_gripper_action_request(self, action_name: str, *, torque: float, use_torque_mode: bool) -> None:
         self.get_logger().info(

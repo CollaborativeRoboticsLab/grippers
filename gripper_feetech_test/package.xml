@@ -3,7 +3,7 @@
 <package format="3">
   <name>gripper_feetech_test</name>
   <version>0.0.0</version>
-  <description>Feetech C++ test gripper node (rclcpp) to replace previous Python dummy package.</description>
+  <description>Gripper-level Feetech test wrapper with open/close actions and articulation publication.</description>
   <maintainer email="ubuntu@example.com">ubuntu</maintainer>
   <license>TODO: License declaration</license>
 
