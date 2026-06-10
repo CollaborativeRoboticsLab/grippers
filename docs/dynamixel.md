@@ -165,7 +165,7 @@ Launch the gripper-level two-finger wrapper:
 
 ```bash
 source install/setup.bash
-ros2 launch gripper_ros gripper_soft_two_finger.launch.py
+ros2 launch gripper_ros gripper_soft_two_fingers.launch.py
 ```
 
 That wrapper can publish:

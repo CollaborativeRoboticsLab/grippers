@@ -1,5 +1,6 @@
 from __future__ import annotations
 from collections.abc import Sequence
+import math
 from typing import Optional
 
 import rclpy
@@ -45,6 +46,8 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self.declare_parameter('gripper_left_finger.joint_name', '')
         self.declare_parameter('gripper_left_finger.multiplier', 0.0)
         self.declare_parameter('gripper_left_finger.offset', 0.0)
+        self.declare_parameter('gripper_left_finger.joint_open_position', float('nan'))
+        self.declare_parameter('gripper_left_finger.joint_close_position', float('nan'))
         self.declare_parameter('gripper_left_finger.support_parent_frame', 'gripper_mgnr09r315hm')
         self.declare_parameter('gripper_left_finger.support_child_frame', 'gripper_gripper_support_1')
         self.declare_parameter('gripper_left_finger.support_origin_xyz', [0.129112, -0.00361501, -0.0045])
@@ -52,6 +55,8 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self.declare_parameter('gripper_right_finger.joint_name', '')
         self.declare_parameter('gripper_right_finger.multiplier', 0.0)
         self.declare_parameter('gripper_right_finger.offset', 0.0)
+        self.declare_parameter('gripper_right_finger.joint_open_position', float('nan'))
+        self.declare_parameter('gripper_right_finger.joint_close_position', float('nan'))
         self.declare_parameter('gripper_right_finger.support_parent_frame', 'gripper_mgnr09r315hm_1')
         self.declare_parameter('gripper_right_finger.support_child_frame', 'gripper_gripper_support')
         self.declare_parameter('gripper_right_finger.support_origin_xyz', [0.0189804, -0.0025, 0.0045])
@@ -136,6 +141,8 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
                     'joint_name': self._prefixed_joint_name(joint_name),
                     'multiplier': float(self.get_parameter(f'{base}.multiplier').value),
                     'offset': float(self.get_parameter(f'{base}.offset').value),
+                    'joint_open_position': float(self.get_parameter(f'{base}.joint_open_position').value),
+                    'joint_close_position': float(self.get_parameter(f'{base}.joint_close_position').value),
                     'support_parent_frame': self._prefixed_frame_name(
                         str(self.get_parameter(f'{base}.support_parent_frame').value)
                     ),
@@ -148,6 +155,23 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             )
 
         return configs
+
+    def _finger_joint_position(self, config: dict[str, float | str], command_position_value: Optional[float]) -> float:
+        scalar = 0.0 if command_position_value is None else float(command_position_value)
+
+        joint_open = float(config['joint_open_position'])
+        joint_close = float(config['joint_close_position'])
+        if not math.isnan(joint_open) and not math.isnan(joint_close):
+            command_open = float(self._servo_config.open_position)
+            command_close = float(self._servo_config.close_position)
+            if math.isclose(command_close, command_open):
+                return joint_open
+
+            alpha = (scalar - command_open) / (command_close - command_open)
+            alpha = max(0.0, min(1.0, alpha))
+            return joint_open + (alpha * (joint_close - joint_open))
+
+        return float(config['offset']) + (float(config['multiplier']) * scalar)
 
     def _connectivity_joint_names(self) -> set[str]:
         finger_configs = self._finger_configs()
@@ -195,7 +219,6 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
     def _joint_state_entries(self, command_position_value: Optional[float], *, include_connectivity: bool = True) -> list[tuple[str, float]]:
         finger_configs = self._finger_configs()
         if finger_configs:
-            scalar = 0.0 if command_position_value is None else float(command_position_value)
             skipped = self._connectivity_joint_names() if not include_connectivity else set()
             entries: list[tuple[str, float]] = []
             for config in finger_configs:
@@ -205,7 +228,7 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
                 entries.append(
                     (
                         joint_name,
-                        float(config['offset']) + (float(config['multiplier']) * scalar),
+                        self._finger_joint_position(config, command_position_value),
                     )
                 )
             return entries
@@ -331,40 +354,61 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self._publish_gripper_joint_states(command_position_value=0.0)
         self._publish_support_connectivity_tf(command_position_value=0.0)
 
+    def _log_gripper_action_request(self, action_name: str, *, torque: float, use_torque_mode: bool) -> None:
+        self.get_logger().info(
+            f'{action_name} requested (torque={torque:.3f}, use_torque_mode={use_torque_mode})'
+        )
+
+    def _log_gripper_action_result(self, action_name: str, result_message: str, *, success: bool) -> None:
+        log = self.get_logger().info if success else self.get_logger().warning
+        log(f'{action_name} result: {result_message}')
+
     def _execute_open(self, goal_handle) -> OpenGripper.Result:
         goal = goal_handle.request
-        return self._execute_position_goal(
+        torque = self._resolve_torque(float(goal.torque))
+        use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
+        self._log_gripper_action_request('open_gripper', torque=torque, use_torque_mode=use_torque_mode)
+        result = self._execute_position_goal(
             goal_handle,
             OpenGripper.Feedback,
             OpenGripper.Result,
             target_position=float(self._servo_config.open_position),
-            torque=self._resolve_torque(float(goal.torque)),
-            use_torque_mode=self._resolve_use_torque_mode(bool(goal.use_torque_mode)),
+            torque=torque,
+            use_torque_mode=use_torque_mode,
             already_message='Servo already at open position.',
             success_message='Open command sent.',
             timeout_message='Open timed out or was canceled.',
             failure_prefix='Open failed',
         )
+        self._log_gripper_action_result('open_gripper', result.message, success=bool(result.success))
+        return result
 
     def _execute_close(self, goal_handle) -> CloseGripper.Result:
         goal = goal_handle.request
         close_requested = bool(goal.close) or bool(self._servo_config.close_default)
+        torque = self._resolve_torque(float(goal.torque))
+        use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
+        self._log_gripper_action_request('close_gripper', torque=torque, use_torque_mode=use_torque_mode)
         if not close_requested:
             goal_handle.succeed()
-            return CloseGripper.Result(success=True, message='Close goal flag was false; no action taken.')
+            result = CloseGripper.Result(success=True, message='Close goal flag was false; no action taken.')
+            self._log_gripper_action_result('close_gripper', result.message, success=True)
+            return result
 
-        return self._execute_position_goal(
+        result = self._execute_position_goal(
             goal_handle,
             CloseGripper.Feedback,
             CloseGripper.Result,
             target_position=float(self._servo_config.close_position),
-            torque=self._resolve_torque(float(goal.torque)),
-            use_torque_mode=self._resolve_use_torque_mode(bool(goal.use_torque_mode)),
+            torque=torque,
+            use_torque_mode=use_torque_mode,
             already_message='Servo already at close position.',
             success_message='Close command sent.',
             timeout_message='Close timed out or was canceled.',
             failure_prefix='Close failed',
         )
+        self._log_gripper_action_result('close_gripper', result.message, success=bool(result.success))
+        return result
 
     def destroy_node(self) -> bool:
         self._open_server.destroy()
@@ -383,7 +427,8 @@ def main(args=None) -> None:
     finally:
         if node is not None:
             node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

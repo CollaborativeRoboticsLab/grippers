@@ -4,15 +4,11 @@ gripper_two_fingers_node:
     # for this concrete gripper instance.
     motor_model: XM430
 
-    # Publish the articulation joints needed by robot_state_publisher so the sliding support
-    # subtree remains connected in TF. The current coefficients keep the planar/linkage joints
-    # at zero and drive the primary motor joint from the measured motor position.
-    # Tune these multipliers/offsets as the linkage model evolves.
-    # When publish_support_connectivity_tf=true, the planar_* entries are used internally
-    # to build the two dynamic support connectivity transforms and are not re-published on
-    # /joint_states, avoiding duplicate TF paths.
+    # Publish the two slider joints needed by robot_state_publisher.
+    # The updated URDF now keeps each support subtree directly attached below the slider child,
+    # so no extra support-connectivity TF bridge is required.
     publish_gripper_joint_states: true
-    publish_support_connectivity_tf: true
+    publish_support_connectivity_tf: false
     gripper_joint_state_topic: joint_states
     gripper_frame_prefix: ''
     gripper_joint_name_prefix: ''
@@ -20,13 +16,13 @@ gripper_two_fingers_node:
 
     # Preferred gripper-level articulation model:
     # - One coupled displacement joint per finger side.
-    # - The support connectivity TF bridges use these values directly.
-    # - The remaining planar_*_1 / planar_*_2 and gripper_revolute_* joints are intentionally
-    #   not published here. If they need to move visually later, revisit the URDF/modeling.
+    # - These map directly to the updated slider joints in the URDF.
     gripper_left_finger:
       joint_name: gripper_planar_4
       multiplier: 0.0
       offset: 0.0
+      joint_open_position: -0.045
+      joint_close_position: 0.0
       support_parent_frame: gripper_mgnr09r315hm
       support_child_frame: gripper_gripper_support_1
       support_origin_xyz: [0.129112, -0.00361501, -0.0045]
@@ -36,15 +32,15 @@ gripper_two_fingers_node:
       joint_name: gripper_planar_5
       multiplier: 0.0
       offset: 0.0
+      joint_open_position: -0.045
+      joint_close_position: 0.0
       support_parent_frame: gripper_mgnr09r315hm_1
       support_child_frame: gripper_gripper_support
       support_origin_xyz: [0.0189804, -0.0025, 0.0045]
       support_axis_xyz: [1.0, 0.0, 0.0]
 
-    # If hardware verification shows the support pairing is opposite of the current URDF,
-    # swap only the two support_child_frame values below before touching code:
-    # - left  -> gripper_gripper_support
-    # - right -> gripper_gripper_support_1
+    # The support_* values are retained for compatibility but are unused while
+    # publish_support_connectivity_tf remains false.
 
     XM430:
       device_name: /dev/ttyUSB0

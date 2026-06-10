@@ -143,7 +143,7 @@ The current example is:
 
 The current gripper-level Dynamixel wrapper launch is:
 
-- [`gripper_ros/launch/gripper_soft_two_finger.launch.py`](../gripper_ros/launch/gripper_soft_two_finger.launch.py)
+- [`gripper_ros/launch/gripper_soft_two_fingers.launch.py`](../gripper_ros/launch/gripper_soft_two_fingers.launch.py)
 
 That launch file loads both parameter files into the gripper-level node:
 

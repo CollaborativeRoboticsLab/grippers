@@ -156,6 +156,25 @@ private:
 		publish_gripper_joint_states(ticks_to_command_units(position_ticks));
 	}
 
+	void log_gripper_action_request(const char * action_name, double torque, bool use_torque_mode)
+	{
+		RCLCPP_INFO(
+			this->get_logger(),
+			"%s requested (torque=%.3f, use_torque_mode=%s)",
+			action_name,
+			torque,
+			use_torque_mode ? "true" : "false");
+	}
+
+	void log_gripper_action_result(const char * action_name, const std::string & message, bool success)
+	{
+		if (success) {
+			RCLCPP_INFO(this->get_logger(), "%s result: %s", action_name, message.c_str());
+		} else {
+			RCLCPP_WARN(this->get_logger(), "%s result: %s", action_name, message.c_str());
+		}
+	}
+
 	rclcpp_action::GoalResponse handle_goal_open(
 		const rclcpp_action::GoalUUID &, std::shared_ptr<const OpenGripper::Goal>)
 	{
@@ -183,10 +202,11 @@ private:
 		if (poll_rate <= 0.0) {
 			poll_rate = 30.0;
 		}
+		const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
+		log_gripper_action_request("open_gripper", goal->torque, use_torque_mode);
 
 		try {
 			ensure_connected();
-			const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
 			if (use_torque_mode) {
 				apply_torque_limit(resolve_torque_limit(goal->torque));
 			}
@@ -198,6 +218,7 @@ private:
 				auto result = std::make_shared<OpenGripper::Result>();
 				result->success = true;
 				result->message = "Gripper already open.";
+				log_gripper_action_result("open_gripper", result->message, true);
 				goal_handle->succeed(result);
 				return;
 			}
@@ -224,6 +245,7 @@ private:
 				auto result = std::make_shared<OpenGripper::Result>();
 				result->success = false;
 				result->message = "Open timed out.";
+				log_gripper_action_result("open_gripper", result->message, false);
 				goal_handle->abort(result);
 				return;
 			}
@@ -231,11 +253,13 @@ private:
 			auto result = std::make_shared<OpenGripper::Result>();
 			result->success = true;
 			result->message = "Open command sent.";
+			log_gripper_action_result("open_gripper", result->message, true);
 			goal_handle->succeed(result);
 		} catch (const std::exception & e) {
 			auto result = std::make_shared<OpenGripper::Result>();
 			result->success = false;
 			result->message = std::string("Open failed: ") + e.what();
+			log_gripper_action_result("open_gripper", result->message, false);
 			goal_handle->abort(result);
 		}
 	}
@@ -261,11 +285,14 @@ private:
 		const auto goal = goal_handle->get_goal();
 		const bool close_default = this->get_parameter("close_default").as_bool();
 		const bool close_requested = goal->close || close_default;
+		const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
+		log_gripper_action_request("close_gripper", goal->torque, use_torque_mode);
 
 		if (!close_requested) {
 			auto result = std::make_shared<CloseGripper::Result>();
 			result->success = true;
 			result->message = "Close goal flag was false; no action taken.";
+			log_gripper_action_result("close_gripper", result->message, true);
 			goal_handle->succeed(result);
 			return;
 		}
@@ -281,7 +308,6 @@ private:
 
 		try {
 			ensure_connected();
-			const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
 			if (use_torque_mode) {
 				apply_torque_limit(resolve_torque_limit(goal->torque));
 			}
@@ -293,6 +319,7 @@ private:
 				auto result = std::make_shared<CloseGripper::Result>();
 				result->success = true;
 				result->message = "Gripper already closed.";
+				log_gripper_action_result("close_gripper", result->message, true);
 				goal_handle->succeed(result);
 				return;
 			}
@@ -319,6 +346,7 @@ private:
 				auto result = std::make_shared<CloseGripper::Result>();
 				result->success = false;
 				result->message = "Close timed out.";
+				log_gripper_action_result("close_gripper", result->message, false);
 				goal_handle->abort(result);
 				return;
 			}
@@ -326,11 +354,13 @@ private:
 			auto result = std::make_shared<CloseGripper::Result>();
 			result->success = true;
 			result->message = "Close command sent.";
+			log_gripper_action_result("close_gripper", result->message, true);
 			goal_handle->succeed(result);
 		} catch (const std::exception & e) {
 			auto result = std::make_shared<CloseGripper::Result>();
 			result->success = false;
 			result->message = std::string("Close failed: ") + e.what();
+			log_gripper_action_result("close_gripper", result->message, false);
 			goal_handle->abort(result);
 		}
 	}

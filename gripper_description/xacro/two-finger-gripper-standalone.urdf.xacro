@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="soft_two_fingers">
+  <xacro:include filename="two-finger-gripper.urdf.xacro" />
+
+  <xacro:arg name="prefix" default="" />
+
+  <link name="world" />
+
+  <xacro:two_finger_gripper
+    parent="world"
+    prefix="$(arg prefix)"
+    xyz="0 0 0"
+    rpy="0 0 0" />
+</robot>

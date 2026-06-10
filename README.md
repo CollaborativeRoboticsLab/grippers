@@ -92,8 +92,17 @@ See [docs/dynamixel.md](docs/dynamixel.md) for motor model presets and parameter
 
 ```bash
 source install/setup.bash
-ros2 launch gripper_ros gripper_soft_two_finger.launch.py
+ros2 launch gripper_ros gripper_soft_two_fingers.launch.py
 ```
+
+### Gripper URDF simulation in RViz:
+
+```bash
+source install/setup.bash
+ros2 launch gripper_ros gripper_sim.launch.py model:=two-finger-gripper-standalone
+```
+
+This starts the gripper URDF only in `robot_state_publisher`, `joint_state_publisher_gui`, and `rviz2` so you can calibrate the model without hardware.
 
 If a USB serial adapter is unplugged and replugged, the device path may change from `/dev/ttyUSB0` to `/dev/ttyUSB1` or similar. Recheck `/dev/ttyUSB*` before assuming the motor settings changed.
 
