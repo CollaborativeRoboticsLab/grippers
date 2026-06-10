@@ -27,11 +27,24 @@ gripper_two_fingers_node:
       joint_name: gripper_planar_4
       multiplier: 0.0
       offset: 0.0
+      support_parent_frame: gripper_mgnr09r315hm
+      support_child_frame: gripper_gripper_support_1
+      support_origin_xyz: [0.129112, -0.00361501, -0.0045]
+      support_axis_xyz: [-1.0, 0.0, 0.0]
 
     gripper_right_finger:
       joint_name: gripper_planar_5
       multiplier: 0.0
       offset: 0.0
+      support_parent_frame: gripper_mgnr09r315hm_1
+      support_child_frame: gripper_gripper_support
+      support_origin_xyz: [0.0189804, -0.0025, 0.0045]
+      support_axis_xyz: [1.0, 0.0, 0.0]
+
+    # If hardware verification shows the support pairing is opposite of the current URDF,
+    # swap only the two support_child_frame values below before touching code:
+    # - left  -> gripper_gripper_support
+    # - right -> gripper_gripper_support_1
 
     XM430:
       device_name: /dev/ttyUSB0
@@ -40,7 +53,7 @@ gripper_two_fingers_node:
 
       position_is_radians: false
       open_position: 900.0
-      close_position: 2000.0
+      close_position: 1950.0
 
       use_torque_mode: false
       default_torque: 0.0

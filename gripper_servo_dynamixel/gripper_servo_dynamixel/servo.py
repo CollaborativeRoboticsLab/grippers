@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from dynamixel_sdk import PacketHandler, PortHandler
 from rclpy.node import Node
@@ -116,6 +117,11 @@ class DynamixelProtocol2Driver:
         operating_mode_current: int,
         operating_mode_position: int,
         operating_mode_current_based_position: int,
+        comm_retry_timeout_sec: float,
+        comm_retry_initial_delay_sec: float,
+        comm_retry_max_delay_sec: float,
+        comm_retry_backoff: float,
+        comm_retry_reinit_every: int,
     ) -> None:
         if PortHandler is None or PacketHandler is None:
             raise RuntimeError(
@@ -127,6 +133,11 @@ class DynamixelProtocol2Driver:
         self._packet = PacketHandler(2.0)
         self._device_name = device_name
         self._baudrate = int(baudrate)
+        self._comm_retry_timeout_sec = max(0.0, float(comm_retry_timeout_sec))
+        self._comm_retry_initial_delay_sec = max(0.0, float(comm_retry_initial_delay_sec))
+        self._comm_retry_max_delay_sec = max(0.0, float(comm_retry_max_delay_sec))
+        self._comm_retry_backoff = max(1.0, float(comm_retry_backoff))
+        self._comm_retry_reinit_every = max(0, int(comm_retry_reinit_every))
 
         self.addr_operating_mode = int(addr_operating_mode)
         self.addr_torque_enable = int(addr_torque_enable)
@@ -157,6 +168,67 @@ class DynamixelProtocol2Driver:
         except Exception:  # noqa: BLE001
             pass
 
+    def _reopen(self) -> None:
+        try:
+            self._port.closePort()
+        except Exception:  # noqa: BLE001
+            pass
+        self._open()
+
+    def _is_retryable_packet_error(self, dxl_error: int) -> bool:
+        if dxl_error == 0:
+            return False
+        error_text = self._packet.getRxPacketError(dxl_error)
+        return 'CRC' in error_text or 'corrupt' in error_text.lower()
+
+    def _normalize_sdk_result(self, op: str, result: tuple) -> tuple[Optional[int], int, int]:
+        if len(result) == 2:
+            comm_result, dxl_error = result
+            return None, int(comm_result), int(dxl_error)
+        if len(result) == 3:
+            data, comm_result, dxl_error = result
+            return int(data), int(comm_result), int(dxl_error)
+        raise RuntimeError(f'{op} returned an unexpected SDK result shape: {len(result)} values')
+
+    def _with_retry(self, op: str, call: Callable[[], tuple]) -> tuple[Optional[int], int, int]:
+        deadline = time.monotonic() + self._comm_retry_timeout_sec
+        delay = self._comm_retry_initial_delay_sec
+        attempt = 0
+        last_error: Optional[Exception] = None
+
+        while True:
+            try:
+                result = self._normalize_sdk_result(op, call())
+                _, comm_result, dxl_error = result
+                if comm_result == 0 and not self._is_retryable_packet_error(dxl_error):
+                    return result
+
+                if comm_result == 0:
+                    self._raise_if_error(comm_result, dxl_error, op)
+            except IndexError as exc:
+                last_error = RuntimeError(f'{op} communication failed: {exc}')
+            except RuntimeError as exc:
+                last_error = exc
+            except Exception:  # noqa: BLE001
+                raise
+
+            attempt += 1
+            if time.monotonic() >= deadline:
+                if last_error is not None:
+                    raise last_error
+                raise RuntimeError(f'{op} communication failed after retries.')
+
+            if self._comm_retry_reinit_every > 0 and attempt % self._comm_retry_reinit_every == 0:
+                self._reopen()
+
+            if delay > 0.0:
+                time.sleep(delay)
+            if self._comm_retry_max_delay_sec > 0.0:
+                delay = min(
+                    self._comm_retry_max_delay_sec,
+                    max(self._comm_retry_initial_delay_sec, delay * self._comm_retry_backoff),
+                )
+
     def _raise_if_error(self, comm_result: int, dxl_error: int, op: str) -> None:
         if comm_result != 0:
             raise RuntimeError(f'{op} communication failed: {self._packet.getTxRxResult(comm_result)}')
@@ -164,39 +236,60 @@ class DynamixelProtocol2Driver:
             raise RuntimeError(f'{op} returned error: {self._packet.getRxPacketError(dxl_error)}')
 
     def set_operating_mode(self, mode: int) -> None:
-        comm, err = self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_operating_mode, int(mode))
+        _, comm, err = self._with_retry(
+            'set_operating_mode',
+            lambda: self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_operating_mode, int(mode)),
+        )
         self._raise_if_error(comm, err, 'set_operating_mode')
 
     def enable_torque(self) -> None:
-        comm, err = self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_torque_enable, 1)
+        _, comm, err = self._with_retry(
+            'enable_torque',
+            lambda: self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_torque_enable, 1),
+        )
         self._raise_if_error(comm, err, 'enable_torque')
 
     def disable_torque(self) -> None:
-        comm, err = self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_torque_enable, 0)
+        _, comm, err = self._with_retry(
+            'disable_torque',
+            lambda: self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_torque_enable, 0),
+        )
         self._raise_if_error(comm, err, 'disable_torque')
 
     def write_goal_position(self, position_ticks: int) -> None:
-        comm, err = self._packet.write4ByteTxRx(
-            self._port,
-            self._dxl_id,
-            self.addr_goal_position,
-            int(position_ticks) & 0xFFFFFFFF,
+        _, comm, err = self._with_retry(
+            'write_goal_position',
+            lambda: self._packet.write4ByteTxRx(
+                self._port,
+                self._dxl_id,
+                self.addr_goal_position,
+                int(position_ticks) & 0xFFFFFFFF,
+            ),
         )
         self._raise_if_error(comm, err, 'write_goal_position')
 
     def write_goal_current(self, current_raw: int) -> None:
         current_raw = int(max(-32768, min(32767, int(current_raw))))
         current_u16 = current_raw & 0xFFFF
-        comm, err = self._packet.write2ByteTxRx(self._port, self._dxl_id, self.addr_goal_current, current_u16)
+        _, comm, err = self._with_retry(
+            'write_goal_current',
+            lambda: self._packet.write2ByteTxRx(self._port, self._dxl_id, self.addr_goal_current, current_u16),
+        )
         self._raise_if_error(comm, err, 'write_goal_current')
 
     def read_present_position(self) -> int:
-        data, comm, err = self._packet.read4ByteTxRx(self._port, self._dxl_id, self.addr_present_position)
+        data, comm, err = self._with_retry(
+            'read_present_position',
+            lambda: self._packet.read4ByteTxRx(self._port, self._dxl_id, self.addr_present_position),
+        )
         self._raise_if_error(comm, err, 'read_present_position')
         return int(data)
 
     def read_present_current(self) -> int:
-        data, comm, err = self._packet.read2ByteTxRx(self._port, self._dxl_id, self.addr_present_current)
+        data, comm, err = self._with_retry(
+            'read_present_current',
+            lambda: self._packet.read2ByteTxRx(self._port, self._dxl_id, self.addr_present_current),
+        )
         self._raise_if_error(comm, err, 'read_present_current')
         raw = int(data) & 0xFFFF
         if raw >= 0x8000:
@@ -220,6 +313,11 @@ class DynamixelServo:
             operating_mode_current=config.operating_mode_current,
             operating_mode_position=config.operating_mode_position,
             operating_mode_current_based_position=config.operating_mode_current_based_position,
+            comm_retry_timeout_sec=config.comm_retry_timeout_sec,
+            comm_retry_initial_delay_sec=config.comm_retry_initial_delay_sec,
+            comm_retry_max_delay_sec=config.comm_retry_max_delay_sec,
+            comm_retry_backoff=config.comm_retry_backoff,
+            comm_retry_reinit_every=config.comm_retry_reinit_every,
         )
 
     def close(self) -> None:

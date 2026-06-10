@@ -95,8 +95,11 @@ def format_comm_error(packet: PacketHandler, comm_result: int, dxl_error: int) -
 
 def ping_id(port: PortHandler, packet: PacketHandler, servo_id: int) -> tuple[bool, str]:
 	model_number, comm_result, dxl_error = packet.ping(port, servo_id)
-	if comm_result == 0 and dxl_error == 0:
-		return True, f'model={model_number}'
+	if comm_result == 0:
+		detail = f'model={model_number}'
+		if dxl_error != 0:
+			detail += f' with status error ({packet.getRxPacketError(dxl_error)})'
+		return True, detail
 	return False, format_comm_error(packet, comm_result, dxl_error)
 
 
@@ -128,7 +131,7 @@ def discover_servos(port: PortHandler, packet: PacketHandler, servo_ids: Sequenc
 		ok, detail = ping_id(port, packet, servo_id)
 		if ok:
 			found.append(servo_id)
-			print(f'  ID {servo_id}: online ({detail})')
+			print(f'  ID {servo_id}: reachable ({detail})')
 		else:
 			print(f'  ID {servo_id}: no response ({detail})')
 	return found

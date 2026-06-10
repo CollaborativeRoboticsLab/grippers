@@ -17,7 +17,7 @@ def generate_launch_description() -> LaunchDescription:
         parameters=[motor_params_file, gripper_params_file],
     )
 
-    default_motor_params = PathJoinSubstitution([FindPackageShare('gripper_ros'), 'config', 'motors', 'dynamixel.yaml'])
+    default_motor_params = PathJoinSubstitution([FindPackageShare('gripper_ros'), 'config', 'servos', 'dynamixel.yaml'])
     default_gripper_params = PathJoinSubstitution(
         [FindPackageShare('gripper_ros'), 'config', 'grippers', 'soft_two_finger_dynamixel.yaml']
     )

@@ -4,6 +4,8 @@ from typing import Optional
 
 import rclpy
 from geometry_msgs.msg import TransformStamped
+from gripper_msgs.action import CloseGripper, OpenGripper
+from rclpy.action import ActionServer
 from rclpy.parameter import Parameter
 from sensor_msgs.msg import JointState
 from tf2_ros import TransformBroadcaster
@@ -13,7 +15,28 @@ from gripper_servo_dynamixel.gripper_action_node import DynamixelServoActionNode
 
 class GripperTwoFingersNode(DynamixelServoActionNode):
     def __init__(self) -> None:
-        super().__init__(node_name='gripper_two_fingers_node', default_status_publish_rate_hz=0.0)
+        super().__init__(
+            node_name='gripper_two_fingers_node',
+            default_status_publish_rate_hz=0.0,
+            enable_ros_interface=False,
+        )
+
+        self._open_server = ActionServer(
+            self,
+            OpenGripper,
+            'open_gripper',
+            execute_callback=self._execute_open,
+            goal_callback=self._goal_cb,
+            cancel_callback=self._cancel_cb,
+        )
+        self._close_server = ActionServer(
+            self,
+            CloseGripper,
+            'close_gripper',
+            execute_callback=self._execute_close,
+            goal_callback=self._goal_cb,
+            cancel_callback=self._cancel_cb,
+        )
 
         self.declare_parameter('publish_gripper_joint_states', False)
         self.declare_parameter('gripper_joint_state_topic', 'joint_states')
@@ -22,9 +45,17 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self.declare_parameter('gripper_left_finger.joint_name', '')
         self.declare_parameter('gripper_left_finger.multiplier', 0.0)
         self.declare_parameter('gripper_left_finger.offset', 0.0)
+        self.declare_parameter('gripper_left_finger.support_parent_frame', 'gripper_mgnr09r315hm')
+        self.declare_parameter('gripper_left_finger.support_child_frame', 'gripper_gripper_support_1')
+        self.declare_parameter('gripper_left_finger.support_origin_xyz', [0.129112, -0.00361501, -0.0045])
+        self.declare_parameter('gripper_left_finger.support_axis_xyz', [-1.0, 0.0, 0.0])
         self.declare_parameter('gripper_right_finger.joint_name', '')
         self.declare_parameter('gripper_right_finger.multiplier', 0.0)
         self.declare_parameter('gripper_right_finger.offset', 0.0)
+        self.declare_parameter('gripper_right_finger.support_parent_frame', 'gripper_mgnr09r315hm_1')
+        self.declare_parameter('gripper_right_finger.support_child_frame', 'gripper_gripper_support')
+        self.declare_parameter('gripper_right_finger.support_origin_xyz', [0.0189804, -0.0025, 0.0045])
+        self.declare_parameter('gripper_right_finger.support_axis_xyz', [1.0, 0.0, 0.0])
         self.declare_parameter('gripper_joint_state_names', Parameter.Type.STRING_ARRAY)
         self.declare_parameter('gripper_joint_state_multipliers', Parameter.Type.DOUBLE_ARRAY)
         self.declare_parameter('gripper_joint_state_offsets', Parameter.Type.DOUBLE_ARRAY)
@@ -79,6 +110,18 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             return base_name
         return prefix + base_name
 
+    def _prefixed_frame_name(self, base_name: str) -> str:
+        prefix = self._frame_prefix()
+        if not prefix or base_name.startswith(prefix):
+            return base_name
+        return prefix + base_name
+
+    def _parameter_float_triplet(self, name: str) -> tuple[float, float, float]:
+        values = self._parameter_array(name)
+        if len(values) != 3:
+            raise RuntimeError(f'{name} must contain exactly three numeric values.')
+        return (float(values[0]), float(values[1]), float(values[2]))
+
     def _finger_configs(self) -> list[dict[str, float | str]]:
         configs: list[dict[str, float | str]] = []
         for side in ('left', 'right'):
@@ -93,6 +136,14 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
                     'joint_name': self._prefixed_joint_name(joint_name),
                     'multiplier': float(self.get_parameter(f'{base}.multiplier').value),
                     'offset': float(self.get_parameter(f'{base}.offset').value),
+                    'support_parent_frame': self._prefixed_frame_name(
+                        str(self.get_parameter(f'{base}.support_parent_frame').value)
+                    ),
+                    'support_child_frame': self._prefixed_frame_name(
+                        str(self.get_parameter(f'{base}.support_child_frame').value)
+                    ),
+                    'support_origin_xyz': self._parameter_float_triplet(f'{base}.support_origin_xyz'),
+                    'support_axis_xyz': self._parameter_float_triplet(f'{base}.support_axis_xyz'),
                 }
             )
 
@@ -168,40 +219,36 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         if not bool(self.get_parameter('publish_support_connectivity_tf').value):
             return
 
-        frame_prefix = self._frame_prefix()
         positions = self._joint_state_position_map(command_position_value)
-
-        specs_by_joint = {
-            self._prefixed_joint_name('gripper_planar_4'): {
-                'parent': frame_prefix + 'gripper_mgnr09r315hm',
-                'child': frame_prefix + 'gripper_gripper_support_1',
-                'origin': (0.129112, -0.00361501, -0.0045),
-                'axis': (-1.0, 0.0, 0.0),
-            },
-            self._prefixed_joint_name('gripper_planar_5'): {
-                'parent': frame_prefix + 'gripper_mgnr09r315hm_1',
-                'child': frame_prefix + 'gripper_gripper_support',
-                'origin': (0.0189804, -0.0025, 0.0045),
-                'axis': (1.0, 0.0, 0.0),
-            },
-        }
 
         finger_configs = self._finger_configs()
         if finger_configs:
-            specs = []
+            specs: list[dict[str, str | tuple[float, float, float]]] = []
             for config in finger_configs:
-                spec = specs_by_joint.get(str(config['joint_name']))
-                if spec is not None:
-                    specs.append({'joint_name': str(config['joint_name']), **spec})
+                specs.append(
+                    {
+                        'joint_name': str(config['joint_name']),
+                        'parent': str(config['support_parent_frame']),
+                        'child': str(config['support_child_frame']),
+                        'origin': tuple(config['support_origin_xyz']),
+                        'axis': tuple(config['support_axis_xyz']),
+                    }
+                )
         else:
             specs = [
                 {
                     'joint_name': self._prefixed_joint_name('gripper_planar_4'),
-                    **specs_by_joint[self._prefixed_joint_name('gripper_planar_4')],
+                    'parent': self._prefixed_frame_name('gripper_mgnr09r315hm'),
+                    'child': self._prefixed_frame_name('gripper_gripper_support_1'),
+                    'origin': (0.129112, -0.00361501, -0.0045),
+                    'axis': (-1.0, 0.0, 0.0),
                 },
                 {
                     'joint_name': self._prefixed_joint_name('gripper_planar_5'),
-                    **specs_by_joint[self._prefixed_joint_name('gripper_planar_5')],
+                    'parent': self._prefixed_frame_name('gripper_mgnr09r315hm_1'),
+                    'child': self._prefixed_frame_name('gripper_gripper_support'),
+                    'origin': (0.0189804, -0.0025, 0.0045),
+                    'axis': (1.0, 0.0, 0.0),
                 },
             ]
 
@@ -283,6 +330,46 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
     def _handle_servo_unavailable_feedback(self) -> None:
         self._publish_gripper_joint_states(command_position_value=0.0)
         self._publish_support_connectivity_tf(command_position_value=0.0)
+
+    def _execute_open(self, goal_handle) -> OpenGripper.Result:
+        goal = goal_handle.request
+        return self._execute_position_goal(
+            goal_handle,
+            OpenGripper.Feedback,
+            OpenGripper.Result,
+            target_position=float(self._servo_config.open_position),
+            torque=self._resolve_torque(float(goal.torque)),
+            use_torque_mode=self._resolve_use_torque_mode(bool(goal.use_torque_mode)),
+            already_message='Servo already at open position.',
+            success_message='Open command sent.',
+            timeout_message='Open timed out or was canceled.',
+            failure_prefix='Open failed',
+        )
+
+    def _execute_close(self, goal_handle) -> CloseGripper.Result:
+        goal = goal_handle.request
+        close_requested = bool(goal.close) or bool(self._servo_config.close_default)
+        if not close_requested:
+            goal_handle.succeed()
+            return CloseGripper.Result(success=True, message='Close goal flag was false; no action taken.')
+
+        return self._execute_position_goal(
+            goal_handle,
+            CloseGripper.Feedback,
+            CloseGripper.Result,
+            target_position=float(self._servo_config.close_position),
+            torque=self._resolve_torque(float(goal.torque)),
+            use_torque_mode=self._resolve_use_torque_mode(bool(goal.use_torque_mode)),
+            already_message='Servo already at close position.',
+            success_message='Close command sent.',
+            timeout_message='Close timed out or was canceled.',
+            failure_prefix='Close failed',
+        )
+
+    def destroy_node(self) -> bool:
+        self._open_server.destroy()
+        self._close_server.destroy()
+        return super().destroy_node()
 
 
 def main(args=None) -> None:

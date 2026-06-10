@@ -1,10 +1,10 @@
 # grippers
 
-ROS 2 gripper drivers that expose a **common action-based API** for opening/closing a custom built gripper.
+ROS 2 gripper drivers that expose a **common action-based API** for low-level servo control and gripper-level open/close control.
 
 ## Packages
 
-- `gripper_msgs`: ROS 2 action definitions (`OpenGripper`, `CloseGripper`).
+- `gripper_msgs`: ROS 2 action definitions (`ServoControl`, `OpenGripper`, `CloseGripper`).
 - `gripper_servo_dynamixel`: low-level DynamixelSDK (Protocol 2.0) servo/action package (Python).
 - `gripper_two_fingers`: gripper-level two-finger Dynamixel wrapper (Python).
 - `gripper_servo_feetech`: low-level Feetech STS/SCS servo/action package (C++).
@@ -13,12 +13,13 @@ ROS 2 gripper drivers that expose a **common action-based API** for opening/clos
 
 ## Action API
 
-All implementations aim to expose the same action names:
+This workspace uses two action layers:
 
-- `/open_gripper` (`gripper_msgs/action/OpenGripper`)
-- `/close_gripper` (`gripper_msgs/action/CloseGripper`)
+- low-level servo control: `/servo_control`
+- gripper-level control: `/open_gripper` and `/close_gripper`
 
-See [docs/action_interface.md](docs/action_interface.md) for goal/result/feedback fields and CLI examples.
+See [docs/servo_action_interface.md](docs/servo_action_interface.md) for low-level servo command fields and CLI examples.
+See [docs/gripper_action_interface.md](docs/gripper_action_interface.md) for gripper open/close fields and CLI examples.
 
 ### Dependencies
 
@@ -98,7 +99,7 @@ If a USB serial adapter is unplugged and replugged, the device path may change f
 
 ### Gripper control
 
-Use the action CLI to send open/close goals (see [docs/action_interface.md](docs/action_interface.md) for details):
+Use the action CLI to send open/close goals (see [docs/gripper_action_interface.md](docs/gripper_action_interface.md) for details):
 
 To open gripper:
 
@@ -114,7 +115,8 @@ source install/setup.bash
 ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
 ```
 
-Read the [action interface docs](docs/action_interface.md) for more details on goal/result/feedback fields and CLI usage.
+Read the [gripper action interface docs](docs/gripper_action_interface.md) for more details on open/close goal fields and CLI usage.
+Read the [servo action interface docs](docs/servo_action_interface.md) for direct low-level servo commands.
 
 
 ### Polling for Dynamixel motors

@@ -1,13 +1,17 @@
 
 # Feetech (STS/SCS) gripper
 
-This workspace includes a ROS 2 **action server** for a Feetech STS/SCS-style servo-based gripper, using the driver sources vendored in `gripper_servo_feetech/include/gripper_servo_feetech/Feetech-STSServo`.
+This workspace includes a ROS 2 **action server** for direct Feetech STS/SCS-style single-servo control, using the driver sources vendored in `gripper_servo_feetech/include/gripper_servo_feetech/Feetech-STSServo`.
 
 - Node: `gripper_feetech_action_node` (package: `gripper_servo_feetech`)
 - Launch: `gripper_ros/launch/feetech.launch.py`
 - Main config: `gripper_ros/config/feetech.yaml`
 
-This node follows the common action interface described in [Action Interface](./action_interface.md).
+The low-level node exposes `/servo_control`.
+The gripper-level `gripper_feetech_test` wrapper exposes `/open_gripper` and `/close_gripper` while reusing the same motor logic.
+
+The low-level action details are documented in [Servo Action Interface](./servo_action_interface.md).
+The gripper wrapper action details are documented in [Gripper Action Interface](./gripper_action_interface.md).
 
 ## Main concepts
 
@@ -59,7 +63,15 @@ ros2 launch gripper_ros feetech.launch.py params_file:=/abs/path/to/feetech.yaml
 
 ## Sending actions
 
-See `docs/action_interface.md` for action goal examples.
+Direct servo command:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 0.0, torque: 0.0}"
+```
+
+See [servo_action_interface.md](./servo_action_interface.md) for low-level servo action examples.
+See [gripper_action_interface.md](./gripper_action_interface.md) for gripper-level open/close examples.
 
 ## Parameter reference
 

@@ -4,7 +4,7 @@
 
 ### `gripper_servo_dynamixel`
 - Own the **core Dynamixel servo control class**.
-- Provide a **simple ROS 2 action node** that controls a single servo by position and optional torque/current-limited mode.
+- Provide a **simple ROS 2 action node** that exposes `servo_control` for one-servo position and optional torque/current-limited mode.
 - Remain the low-level motor package.
 - Current implementation language: **Python**.
 
@@ -17,7 +17,7 @@
 
 ### `gripper_servo_feetech`
 - Own the **core Feetech servo control class / low-level action node**.
-- Provide a **simple ROS 2 action node** that controls a single Feetech servo by position and optional torque-limit mode.
+- Provide a **simple ROS 2 action node** that exposes `servo_control` for one Feetech servo by position and optional torque-limit mode.
 - Remain the low-level motor package.
 - Current implementation language: **C++**.
 
@@ -110,6 +110,22 @@ Interpretation for implementation:
 - Publish two dynamic TF bridges in `gripper_two_fingers` for the URDF support-connectivity paths.
 - Keep the shared Dynamixel motor YAML global via `/**` so low-level and gripper-level nodes reuse one motor-model config tree without duplicate node-name sections.
 
+## Completed in the Dynamixel support-pairing configurability pass
+
+- Moved the support-connectivity parent/child frame pairing, origin, and axis into `gripper_left_finger.*` / `gripper_right_finger.*` parameters.
+- Kept the current URDF pairing as the default runtime config:
+	- `gripper_planar_4 -> gripper_mgnr09r315hm -> gripper_gripper_support_1`
+	- `gripper_planar_5 -> gripper_mgnr09r315hm_1 -> gripper_gripper_support`
+- Made it possible to test the opposite support pairing in YAML only by swapping the two `support_child_frame` values.
+
+## Completed in the action-ownership pass
+
+- `gripper_servo_dynamixel` now exposes low-level `servo_control` instead of low-level `open_gripper` / `close_gripper`.
+- `gripper_two_fingers` now owns the gripper-level `open_gripper` / `close_gripper` actions while reusing the same Dynamixel motor logic.
+- `gripper_servo_feetech` now exposes low-level `servo_control` instead of low-level `open_gripper` / `close_gripper`.
+- `gripper_feetech_test` now owns the gripper-level `open_gripper` / `close_gripper` actions while reusing the same Feetech motor logic.
+- Added `gripper_msgs/action/ServoControl.action` as the shared low-level servo command contract.
+
 ## Current verified state before hardware tuning
 
 This section is intended as the restart point for the next chat/session.
@@ -135,7 +151,23 @@ This section is intended as the restart point for the next chat/session.
 	```
 
 4. The two dynamic support-connectivity TF bridges are now driven from those two per-finger values.
-5. The old array-based parameter model is still supported in code as a fallback, but the preferred direction is now the `gripper_left_finger` / `gripper_right_finger` model.
+5. The support-connectivity pairing and transform basis are now also configurable per finger:
+
+	```yaml
+	gripper_left_finger:
+	  support_parent_frame: gripper_mgnr09r315hm
+	  support_child_frame: gripper_gripper_support_1
+	  support_origin_xyz: [0.129112, -0.00361501, -0.0045]
+	  support_axis_xyz: [-1.0, 0.0, 0.0]
+
+	gripper_right_finger:
+	  support_parent_frame: gripper_mgnr09r315hm_1
+	  support_child_frame: gripper_gripper_support
+	  support_origin_xyz: [0.0189804, -0.0025, 0.0045]
+	  support_axis_xyz: [1.0, 0.0, 0.0]
+	```
+
+6. The old array-based parameter model is still supported in code as a fallback, but the preferred direction is now the `gripper_left_finger` / `gripper_right_finger` model.
 
 ### Important TF / URDF findings
 
@@ -230,6 +262,7 @@ What is still incomplete:
 - the current left/right finger multipliers are still `0.0`
 - therefore the support TF bridges currently publish valid frame IDs/origins, but no meaningful motion yet
 - this must be tuned with real hardware or measured mechanism geometry
+- the URDF-default support pairing is now configurable, but still needs hardware confirmation
 
 ### What was changed now to make the next session easier
 
@@ -247,6 +280,9 @@ What is still incomplete:
 2. Verify whether the current URDF side pairing is physically correct:
 	- `mgnr09r315hm -> support_1`
 	- `mgnr09r315hm_1 -> support`
+   - if not correct, swap only:
+		- `gripper_left_finger.support_child_frame`
+		- `gripper_right_finger.support_child_frame`
 3. Measure or estimate the real relation between servo position and finger spacing.
 4. Set nonzero values for:
 

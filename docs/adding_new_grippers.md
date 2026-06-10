@@ -69,7 +69,13 @@ Important: the top-level YAML key must match the launched ROS node name.
 For example, the current two-finger wrapper uses `gripper_two_fingers_node`, while the
 low-level Dynamixel-only node uses `gripper_dynamixel_action_node`.
 
-For a Dynamixel gripper, the file should usually:
+Current action ownership pattern:
+
+1. low-level servo packages expose `/servo_control`
+2. gripper-level wrapper packages expose `/open_gripper` and `/close_gripper`
+3. gripper overlays should describe gripper semantics and articulation, not standalone low-level servo debugging APIs
+
+For a Dynamixel gripper overlay, the file should usually:
 
 1. Select the motor preset with `motor_model`.
 2. Override site-specific motor values if needed.
@@ -128,23 +134,23 @@ Launch files live in:
 
 For a gripper-level launch, compose:
 
-1. one motor params file from `config/motors/`
+1. one motor params file from `config/servos/`
 2. one gripper params file from `config/grippers/`
 
 The current example is:
 
-- [`gripper_ros/launch/gripper_dynamixel.launch.py`](../gripper_ros/launch/gripper_dynamixel.launch.py)
+- [`gripper_ros/launch/dynamixel.launch.py`](../gripper_ros/launch/dynamixel.launch.py)
 
 The current gripper-level Dynamixel wrapper launch is:
 
 - [`gripper_ros/launch/gripper_soft_two_finger.launch.py`](../gripper_ros/launch/gripper_soft_two_finger.launch.py)
 
-That launch file loads both parameter files into the action node:
+That launch file loads both parameter files into the gripper-level node:
 
 - `motor_params_file`
 - `gripper_params_file`
 
-When you add a new gripper for the same motor family, you usually do not need a new launch file if the same node type is used. You only need a new gripper overlay YAML.
+When you add a new gripper for the same motor family, you usually do not need a new launch file if the same gripper-level node type is used. You only need a new gripper overlay YAML.
 
 When you add a new motor family or a new node type, add a new launch file for that family.
 
@@ -203,4 +209,5 @@ For a new gripper, the typical checklist is:
 
 - `docs/dynamixel.md`
 - `docs/feetech.md`
-- `docs/action_interface.md`
+- `docs/servo_action_interface.md`
+- `docs/gripper_action_interface.md`

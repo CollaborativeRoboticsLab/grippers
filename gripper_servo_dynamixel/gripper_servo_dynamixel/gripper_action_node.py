@@ -1,12 +1,9 @@
 """Low-level ROS 2 action node for a single Dynamixel servo.
 
 This node stays intentionally below gripper-level linkage logic. It owns one
-``DynamixelServo`` object and exposes the common workspace action interface:
+``DynamixelServo`` object and exposes:
 
-- ``open_gripper``
-- ``close_gripper``
-
-using the configured open/close target positions on that single motor.
+- ``servo_control`` for direct low-level position commands.
 """
 
 from __future__ import annotations
@@ -18,7 +15,7 @@ import rclpy
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.node import Node
 
-from gripper_msgs.action import CloseGripper, OpenGripper
+from gripper_msgs.action import ServoControl
 from gripper_servo_dynamixel.servo import DynamixelServo, DynamixelServoConfig
 
 
@@ -28,6 +25,7 @@ class DynamixelServoActionNode(Node):
         *,
         node_name: str = 'gripper_dynamixel_action_node',
         default_status_publish_rate_hz: float = 1.0,
+        enable_ros_interface: bool = True,
     ) -> None:
         super().__init__(node_name)
 
@@ -37,25 +35,19 @@ class DynamixelServoActionNode(Node):
 
         self._servo_config = DynamixelServoConfig.from_node(self, self.motor_model)
         self._servo: Optional[DynamixelServo] = None
+        self._servo_control_server: Optional[ActionServer] = None
 
         self.declare_parameter('status_publish_rate_hz', float(default_status_publish_rate_hz))
 
-        self._open_server = ActionServer(
-            self,
-            OpenGripper,
-            'open_gripper',
-            execute_callback=self._execute_open,
-            goal_callback=self._goal_cb,
-            cancel_callback=self._cancel_cb,
-        )
-        self._close_server = ActionServer(
-            self,
-            CloseGripper,
-            'close_gripper',
-            execute_callback=self._execute_close,
-            goal_callback=self._goal_cb,
-            cancel_callback=self._cancel_cb,
-        )
+        if enable_ros_interface:
+            self._servo_control_server = ActionServer(
+                self,
+                ServoControl,
+                'servo_control',
+                execute_callback=self._execute_servo_control,
+                goal_callback=self._goal_cb,
+                cancel_callback=self._cancel_cb,
+            )
 
         try:
             self._servo = DynamixelServo(self._servo_config)
@@ -97,6 +89,9 @@ class DynamixelServoActionNode(Node):
 
     def _resolve_use_torque_mode(self, goal_flag: bool) -> bool:
         return bool(goal_flag) or bool(self._servo_config.use_torque_mode)
+
+    def _resolve_servo_control_use_torque_mode(self, requested_torque: float) -> bool:
+        return self._resolve_use_torque_mode(abs(float(requested_torque)) > 0.0)
 
     def _is_at_target(self, target_ticks: int) -> bool:
         if self._servo is None:
@@ -175,57 +170,54 @@ class DynamixelServoActionNode(Node):
             goal_handle.publish_feedback(feedback_cls(progress=float(progress)))
             time.sleep(sleep_sec)
 
-    def _execute_open(self, goal_handle) -> OpenGripper.Result:
-        goal = goal_handle.request
-        open_position = float(self._servo_config.open_position)
-        torque = self._resolve_torque(float(goal.torque))
-        use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
-
+    def _execute_position_goal(
+        self,
+        goal_handle,
+        feedback_cls,
+        result_cls,
+        *,
+        target_position: float,
+        torque: float,
+        use_torque_mode: bool,
+        already_message: str,
+        success_message: str,
+        timeout_message: str,
+        failure_prefix: str,
+    ):
         try:
-            requested_ticks = self._servo.position_to_ticks(open_position) if self._servo is not None else None
+            requested_ticks = self._servo.position_to_ticks(target_position) if self._servo is not None else None
             if requested_ticks is not None and self._is_at_target(requested_ticks):
                 goal_handle.succeed()
-                return OpenGripper.Result(success=True, message='Servo already at open position.')
+                return result_cls(success=True, message=already_message)
 
-            target_ticks = self._apply_torque(torque, open_position) if use_torque_mode else self._apply_position(open_position)
-            ok = self._run_motion_loop(goal_handle, OpenGripper.Feedback, target_ticks=target_ticks)
+            target_ticks = self._apply_torque(torque, target_position) if use_torque_mode else self._apply_position(target_position)
+            ok = self._run_motion_loop(goal_handle, feedback_cls, target_ticks=target_ticks)
             if not ok:
                 goal_handle.abort()
-                return OpenGripper.Result(success=False, message='Open timed out or was canceled.')
+                return result_cls(success=False, message=timeout_message)
             goal_handle.succeed()
-            return OpenGripper.Result(success=True, message='Open command sent.')
+            return result_cls(success=True, message=success_message)
         except Exception as exc:  # noqa: BLE001
             goal_handle.abort()
-            return OpenGripper.Result(success=False, message=f'Open failed: {exc}')
+            return result_cls(success=False, message=f'{failure_prefix}: {exc}')
 
-    def _execute_close(self, goal_handle) -> CloseGripper.Result:
+    def _execute_servo_control(self, goal_handle) -> ServoControl.Result:
         goal = goal_handle.request
-        close_default = bool(self._servo_config.close_default)
-        close_requested = bool(goal.close) or close_default
-        close_position = float(self._servo_config.close_position)
+        position = float(goal.position)
         torque = self._resolve_torque(float(goal.torque))
-        use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
-
-        if not close_requested:
-            goal_handle.succeed()
-            return CloseGripper.Result(success=True, message='Close goal flag was false; no action taken.')
-
-        try:
-            requested_ticks = self._servo.position_to_ticks(close_position) if self._servo is not None else None
-            if requested_ticks is not None and self._is_at_target(requested_ticks):
-                goal_handle.succeed()
-                return CloseGripper.Result(success=True, message='Servo already at close position.')
-
-            target_ticks = self._apply_torque(torque, close_position) if use_torque_mode else self._apply_position(close_position)
-            ok = self._run_motion_loop(goal_handle, CloseGripper.Feedback, target_ticks=target_ticks)
-            if not ok:
-                goal_handle.abort()
-                return CloseGripper.Result(success=False, message='Close timed out or was canceled.')
-            goal_handle.succeed()
-            return CloseGripper.Result(success=True, message='Close command sent.')
-        except Exception as exc:  # noqa: BLE001
-            goal_handle.abort()
-            return CloseGripper.Result(success=False, message=f'Close failed: {exc}')
+        use_torque_mode = self._resolve_servo_control_use_torque_mode(float(goal.torque))
+        return self._execute_position_goal(
+            goal_handle,
+            ServoControl.Feedback,
+            ServoControl.Result,
+            target_position=position,
+            torque=torque,
+            use_torque_mode=use_torque_mode,
+            already_message='Servo already at requested position.',
+            success_message='Servo command sent.',
+            timeout_message='Servo command timed out or was canceled.',
+            failure_prefix='Servo control failed',
+        )
 
     def _publish_status(self) -> None:
         if self._servo is None:
@@ -241,8 +233,8 @@ class DynamixelServoActionNode(Node):
             self.get_logger().warn(f'Unable to read present position: {exc}')
 
     def destroy_node(self) -> bool:
-        self._open_server.destroy()
-        self._close_server.destroy()
+        if self._servo_control_server is not None:
+            self._servo_control_server.destroy()
         if self._servo is not None:
             self._servo.close()
         return super().destroy_node()
@@ -259,7 +251,8 @@ def main(args=None) -> None:
     finally:
         if node is not None:
             node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

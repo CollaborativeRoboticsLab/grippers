@@ -1,11 +1,11 @@
 # Gripper action interface
 
-This workspace standardizes gripper control around **two ROS 2 actions** (from the `gripper_msgs` package):
+This document covers the **gripper-level** actions exposed by gripper wrapper packages.
 
-- `/open_gripper` (`gripper_msgs/action/OpenGripper`)
-- `/close_gripper` (`gripper_msgs/action/CloseGripper`)
+The intended ownership is:
 
-Multiple implementations (e.g. Dynamixel, Feetech) expose these same action names so higher-level software can stay gripper-agnostic.
+- gripper-level wrapper packages expose `/open_gripper` and `/close_gripper`
+- low-level servo packages expose `/servo_control` separately
 
 ## Action types
 

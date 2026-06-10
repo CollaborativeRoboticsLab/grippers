@@ -1,0 +1,13 @@
+# Goal
+# Target servo position in the node's configured command units.
+float64 position
+
+# Optional torque/current limit. If 0.0, the node may use plain position mode or a configured default.
+float64 torque
+---
+# Result
+bool success
+string message
+---
+# Feedback
+float32 progress

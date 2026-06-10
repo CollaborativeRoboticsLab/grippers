@@ -13,6 +13,7 @@ find_package(builtin_interfaces REQUIRED)
 set(action_files
   "action/OpenGripper.action"
   "action/CloseGripper.action"
+  "action/ServoControl.action"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

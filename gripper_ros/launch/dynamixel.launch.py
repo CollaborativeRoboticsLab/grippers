@@ -17,7 +17,7 @@ def generate_launch_description() -> LaunchDescription:
 		parameters=[params_file],
 	)
 
-	default_params = PathJoinSubstitution([FindPackageShare('gripper_ros'), 'config', 'motors', 'dynamixel.yaml'])
+	default_params = PathJoinSubstitution([FindPackageShare('gripper_ros'), 'config', 'servos', 'dynamixel.yaml'])
 
 	return LaunchDescription(
 		[

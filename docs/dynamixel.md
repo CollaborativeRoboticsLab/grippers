@@ -1,7 +1,7 @@
 
 # Dynamixel gripper (Protocol 2.0)
 
-This workspace provides a ROS 2 **action server** node that opens/closes a custom gripper driven by a Dynamixel motor using **DynamixelSDK Protocol 2.0**.
+This workspace provides a ROS 2 **action server** node for direct single-servo control of a Dynamixel motor using **DynamixelSDK Protocol 2.0**.
 
 The main entrypoint is:
 
@@ -11,8 +11,8 @@ For the current articulated two-finger gripper wrapper, the gripper-level entryp
 
 - Node: `gripper_two_fingers_node` (package: `gripper_two_fingers`)
 
-The low-level node owns one Dynamixel servo and the common open/close action behavior.
-The gripper-level wrapper owns articulation publication for `robot_state_publisher`
+The low-level node owns one Dynamixel servo and exposes the low-level `/servo_control` action.
+The gripper-level wrapper owns `/open_gripper` and `/close_gripper`, plus articulation publication for `robot_state_publisher`
 by publishing the mechanism `joint_states` needed to keep the TF tree connected.
 
 For the current two-finger wrapper, the preferred articulation model is now:
@@ -22,7 +22,8 @@ For the current two-finger wrapper, the preferred articulation model is now:
 - two dynamic support-connectivity TF bridges published by `gripper_two_fingers`
 - `robot_state_publisher` handling the rest of the tree
 
-This node follows the common action interface described in [Action Interface](./action_interface.md).
+The low-level action details are documented in [Servo Action Interface](./servo_action_interface.md).
+The gripper wrapper action details are documented in [Gripper Action Interface](./gripper_action_interface.md).
 
 ## Main concepts
 
@@ -76,11 +77,19 @@ gripper_left_finger:
   joint_name: gripper_planar_4
   multiplier: 0.0
   offset: 0.0
+  support_parent_frame: gripper_mgnr09r315hm
+  support_child_frame: gripper_gripper_support_1
+  support_origin_xyz: [0.129112, -0.00361501, -0.0045]
+  support_axis_xyz: [-1.0, 0.0, 0.0]
 
 gripper_right_finger:
   joint_name: gripper_planar_5
   multiplier: 0.0
   offset: 0.0
+  support_parent_frame: gripper_mgnr09r315hm_1
+  support_child_frame: gripper_gripper_support
+  support_origin_xyz: [0.0189804, -0.0025, 0.0045]
+  support_axis_xyz: [1.0, 0.0, 0.0]
 ```
 
 Interpretation:
@@ -88,6 +97,19 @@ Interpretation:
 - the measured motor position is converted into command units
 - that scalar is mapped into left/right finger support displacement with `multiplier` and `offset`
 - the two support-connectivity TF bridges are then derived from those two values
+- the support bridge parent/child frame pairing and origin/axis are also configurable per finger
+
+The current URDF-backed default pairing is:
+
+- `gripper_planar_4 -> gripper_mgnr09r315hm -> gripper_gripper_support_1`
+- `gripper_planar_5 -> gripper_mgnr09r315hm_1 -> gripper_gripper_support`
+
+If hardware proves those support children are swapped, update only:
+
+- `gripper_left_finger.support_child_frame`
+- `gripper_right_finger.support_child_frame`
+
+in the runtime YAML instead of patching the Python node.
 
 For a single coupled servo, the intended physical model is usually:
 
@@ -110,7 +132,7 @@ Log out/in after changing groups.
 
 ### 2) Set your main config
 
-Edit `gripper_ros/config/dynamixel.yaml`:
+Edit `gripper_ros/config/servos/dynamixel.yaml`:
 
 - `motor_model`: `XL330` / `XM430` / `W350` (or your custom preset name)
 - `device_name`: e.g. `/dev/ttyUSB0`
@@ -162,7 +184,15 @@ ros2 launch gripper_ros dyanmixel.launch.py params_file:=/abs/path/to/dynamixel.
 
 ## Sending actions
 
-See `docs/action_interface.md` for action goal examples.
+Low-level direct servo command:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 0.0}"
+```
+
+See [servo_action_interface.md](./servo_action_interface.md) for low-level servo action examples.
+See [gripper_action_interface.md](./gripper_action_interface.md) for gripper-level open/close examples.
 
 ## Probe and diagnostics
 
@@ -234,6 +264,13 @@ The script prints `model`, `operating_mode`, `torque_enable`, `hardware_error`, 
 - `open_position` (float): target open position (radians by default)
 - `close_position` (float): target close position (radians by default)
 
+### Low-level servo action
+### Gripper targets
+
+- `open_position` (float): target open position (radians by default)
+
+- `/servo_control` (`gripper_msgs/action/ServoControl`): direct single-servo target position plus optional torque/current-limited mode
+
 ### Gripper-level two-finger articulation
 
 - `publish_gripper_joint_states` (bool)
@@ -247,9 +284,17 @@ Preferred parameters:
 - `gripper_left_finger.joint_name`
 - `gripper_left_finger.multiplier`
 - `gripper_left_finger.offset`
+- `gripper_left_finger.support_parent_frame`
+- `gripper_left_finger.support_child_frame`
+- `gripper_left_finger.support_origin_xyz`
+- `gripper_left_finger.support_axis_xyz`
 - `gripper_right_finger.joint_name`
 - `gripper_right_finger.multiplier`
 - `gripper_right_finger.offset`
+- `gripper_right_finger.support_parent_frame`
+- `gripper_right_finger.support_child_frame`
+- `gripper_right_finger.support_origin_xyz`
+- `gripper_right_finger.support_axis_xyz`
 
 Legacy fallback parameters still supported in code:
 
@@ -273,6 +318,18 @@ will not make them move automatically unless the URDF models those relationships
 - `goal_tolerance_ticks` (int): success when `abs(target - present) <= tolerance`
 - `motion_timeout_sec` (float): abort if not reached in time
 - `poll_rate_hz` (float): present position polling frequency
+
+### Communication retry behavior
+
+The low-level Dynamixel driver now retries transient communication failures internally before surfacing an action failure. This is intended to hide brief `There is no status packet!`, CRC, or parse glitches from the external action client when the bus recovers quickly.
+
+- `comm_retry_timeout_sec` (float): maximum retry window for one low-level operation
+- `comm_retry_initial_delay_sec` (float): first retry delay
+- `comm_retry_max_delay_sec` (float): maximum backoff delay between retries
+- `comm_retry_backoff` (float): retry backoff multiplier
+- `comm_retry_reinit_every` (int): re-open the serial port after this many failed attempts
+
+Persistent failures still abort the action once the retry window is exhausted.
 
 ### Torque mode
 

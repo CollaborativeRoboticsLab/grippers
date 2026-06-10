@@ -27,7 +27,7 @@
       direction: 1
       zero_offset_ticks: 0
       open_position: 900.0
-      close_position: 2000.0
+      close_position: 1950.0
 
       goal_tolerance_ticks: 20
       motion_timeout_sec: 3.0
