@@ -1,4 +1,4 @@
-# grippers
+# Grippers
 
 ROS 2 gripper drivers that expose a **common action-based API** for low-level servo control and gripper-level open/close control.
 
@@ -6,8 +6,8 @@ ROS 2 gripper drivers that expose a **common action-based API** for low-level se
 
 - `gripper_msgs`: ROS 2 action definitions (`ServoControl`, `OpenGripper`, `CloseGripper`).
 - `gripper_servo_dynamixel`: low-level DynamixelSDK (Protocol 2.0) servo/action package (Python).
-- `gripper_two_fingers`: gripper-level two-finger Dynamixel wrapper (Python).
 - `gripper_servo_feetech`: low-level Feetech STS/SCS servo/action package (C++).
+- `gripper_two_fingers`: gripper-level two-finger Dynamixel wrapper (Python).
 - `gripper_feetech_test`: gripper-level Feetech test wrapper (C++).
 - `gripper_ros`: launch files + centralized motor/gripper parameter YAMLs.
 
