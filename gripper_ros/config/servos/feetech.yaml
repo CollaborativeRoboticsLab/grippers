@@ -5,9 +5,6 @@
     baudrate: 1000000
     servo_id: 1
 
-    # Gripper targets
-    # If position_is_radians=true, these are radians and will be converted to ticks.
-    # Otherwise these are raw servo ticks.
     position_is_radians: false
     ticks_per_rev: 4096
     direction: 1

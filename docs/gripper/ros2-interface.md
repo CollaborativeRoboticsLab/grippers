@@ -13,7 +13,7 @@ The intended ownership is:
 
 Goal:
 
-- `torque` (float): implementation-defined “effort” value
+- `torque` (float): requested torque/effort value; a non-zero goal overrides the node's configured control torque
 - `use_torque_mode` (bool): if true, the driver may apply torque/current limiting
 
 Result:
@@ -30,7 +30,7 @@ Feedback:
 Goal:
 
 - `close` (bool): whether to close (some nodes also support `close_default` as a parameter so `{}` still closes)
-- `torque` (float): implementation-defined “effort” value
+- `torque` (float): requested torque/effort value; a non-zero goal overrides the node's configured control torque
 - `use_torque_mode` (bool)
 
 Result:
@@ -77,14 +77,16 @@ Close with torque/current limiting (if supported by the active driver):
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 80.0, use_torque_mode: true}"
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.5, use_torque_mode: true}"
 ```
 
 ## Notes on `torque`
 
-The action goal field is named `torque`, but its meaning is intentionally **driver-specific**:
+The action goal field is still driver-specific, but the Dynamixel path now supports a calibrated torque interpretation when `torque_per_current_unit` is configured:
 
-- A Dynamixel-based driver will typically treat it like **Goal Current** (raw value; model-specific units).
-- A Feetech STS/SCS-based driver will typically treat it like a **torque limit register value** (raw value; model-specific units).
+- If `torque_per_current_unit` is calibrated in Nm, then the action goal `torque` value is also in Nm for the Dynamixel path.
+- In Dynamixel position mode, the node monitors measured torque and stops at `safety_torque_limit` without reopening the gripper.
+- In Dynamixel torque mode, the node uses `control_torque` unless the goal sends a non-zero `torque`, and it stops once the requested torque is reached while holding position.
+- Feetech STS/SCS drivers continue to interpret the field using their torque-limit register semantics.
 
-See the driver-specific docs for how that value is used.
+If you want to command physical units such as Nm, calibrate the active driver so one action-unit maps consistently to measured torque.

@@ -14,7 +14,7 @@ The intended ownership is:
 Goal:
 
 - `position` (float): target servo position in the configured command units
-- `torque` (float): optional implementation-defined torque/current limit
+- `torque` (float): optional torque request; interpretation depends on the active driver
 
 Result:
 
@@ -52,7 +52,7 @@ Servo command with torque/current limiting (if supported by the active driver):
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 80.0}"
+ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 0.5}"
 ```
 
 ## Notes on `torque`
@@ -60,7 +60,7 @@ ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position
 The action goal field is named `torque`, but its meaning is intentionally **driver-specific**:
 
 - For `ServoControl`, a nonzero `torque` value typically implies a torque-limited or current-limited position command.
-- A Dynamixel-based driver will typically treat it like **Goal Current** (raw value; model-specific units).
-- A Feetech STS/SCS-based driver will typically treat it like a **torque limit register value** (raw value; model-specific units).
+- A Dynamixel-based driver interprets it in the configured torque units and converts it to Goal Current internally using `torque_per_current_unit`. If that parameter is calibrated in Nm, then the action `torque` value is effectively in Nm as well.
+- A Feetech STS/SCS-based driver currently treats it like a torque-limit register value or driver-specific effort value, not a calibrated physical torque unit.
 
 See the driver-specific docs for how that value is used.

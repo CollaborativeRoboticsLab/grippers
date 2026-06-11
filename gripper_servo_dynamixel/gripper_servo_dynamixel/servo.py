@@ -14,7 +14,7 @@ class DynamixelServoConfig:
     motor_model: str = 'XM430'
     device_name: str = '/dev/ttyUSB0'
     baudrate: int = 57600
-    dxl_id: int = 1
+    servo_id: int = 1
     addr_operating_mode: int = 11
     addr_torque_enable: int = 64
     addr_goal_current: int = 102
@@ -39,7 +39,10 @@ class DynamixelServoConfig:
     comm_retry_max_delay_sec: float = 0.5
     comm_retry_backoff: float = 1.7
     comm_retry_reinit_every: int = 5
+    torque_per_current_unit: float = 1.0
+    control_torque: float = 0.0
     default_torque: float = 0.0
+    safety_torque_limit: float = 0.0
     use_torque_mode: bool = False
     close_default: bool = True
 
@@ -54,7 +57,7 @@ class DynamixelServoConfig:
             motor_model=motor_model,
             device_name=str(declare('device_name', '/dev/ttyUSB0')),
             baudrate=int(declare('baudrate', 57600)),
-            dxl_id=int(declare('dxl_id', 1)),
+            servo_id=int(declare('servo_id', 1)),
             addr_operating_mode=int(declare('addr_operating_mode', 11)),
             addr_torque_enable=int(declare('addr_torque_enable', 64)),
             addr_goal_current=int(declare('addr_goal_current', 102)),
@@ -79,7 +82,10 @@ class DynamixelServoConfig:
             comm_retry_max_delay_sec=float(declare('comm_retry_max_delay_sec', 0.5)),
             comm_retry_backoff=float(declare('comm_retry_backoff', 1.7)),
             comm_retry_reinit_every=int(declare('comm_retry_reinit_every', 5)),
+            torque_per_current_unit=float(declare('torque_per_current_unit', 1.0)),
+            control_torque=float(declare('control_torque', 0.0)),
             default_torque=float(declare('default_torque', 0.0)),
+            safety_torque_limit=float(declare('safety_torque_limit', 0.0)),
             use_torque_mode=bool(declare('use_torque_mode', False)),
             close_default=bool(declare('close_default', True)),
         )
@@ -100,6 +106,15 @@ class DynamixelServoConfig:
             return 0.0
         return float(ticks - self.zero_offset_ticks) / float(self.direction) / ticks_per_rad
 
+    def torque_to_current_raw(self, torque: float) -> int:
+        scale = float(self.torque_per_current_unit)
+        if math.isclose(scale, 0.0):
+            return int(round(float(torque)))
+        return int(round(float(torque) / scale))
+
+    def current_raw_to_torque(self, current_raw: int) -> float:
+        return float(current_raw) * float(self.torque_per_current_unit)
+
 
 class DynamixelProtocol2Driver:
     def __init__(
@@ -107,7 +122,7 @@ class DynamixelProtocol2Driver:
         *,
         device_name: str,
         baudrate: int,
-        dxl_id: int,
+        servo_id: int,
         addr_operating_mode: int,
         addr_torque_enable: int,
         addr_goal_current: int,
@@ -128,7 +143,7 @@ class DynamixelProtocol2Driver:
                 'dynamixel_sdk is not available. Install it using pip or apt.'
             )
 
-        self._dxl_id = int(dxl_id)
+        self._servo_id = int(servo_id)
         self._port = PortHandler(device_name)
         self._packet = PacketHandler(2.0)
         self._device_name = device_name
@@ -238,21 +253,21 @@ class DynamixelProtocol2Driver:
     def set_operating_mode(self, mode: int) -> None:
         _, comm, err = self._with_retry(
             'set_operating_mode',
-            lambda: self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_operating_mode, int(mode)),
+            lambda: self._packet.write1ByteTxRx(self._port, self._servo_id, self.addr_operating_mode, int(mode)),
         )
         self._raise_if_error(comm, err, 'set_operating_mode')
 
     def enable_torque(self) -> None:
         _, comm, err = self._with_retry(
             'enable_torque',
-            lambda: self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_torque_enable, 1),
+            lambda: self._packet.write1ByteTxRx(self._port, self._servo_id, self.addr_torque_enable, 1),
         )
         self._raise_if_error(comm, err, 'enable_torque')
 
     def disable_torque(self) -> None:
         _, comm, err = self._with_retry(
             'disable_torque',
-            lambda: self._packet.write1ByteTxRx(self._port, self._dxl_id, self.addr_torque_enable, 0),
+            lambda: self._packet.write1ByteTxRx(self._port, self._servo_id, self.addr_torque_enable, 0),
         )
         self._raise_if_error(comm, err, 'disable_torque')
 
@@ -261,7 +276,7 @@ class DynamixelProtocol2Driver:
             'write_goal_position',
             lambda: self._packet.write4ByteTxRx(
                 self._port,
-                self._dxl_id,
+                self._servo_id,
                 self.addr_goal_position,
                 int(position_ticks) & 0xFFFFFFFF,
             ),
@@ -273,14 +288,14 @@ class DynamixelProtocol2Driver:
         current_u16 = current_raw & 0xFFFF
         _, comm, err = self._with_retry(
             'write_goal_current',
-            lambda: self._packet.write2ByteTxRx(self._port, self._dxl_id, self.addr_goal_current, current_u16),
+            lambda: self._packet.write2ByteTxRx(self._port, self._servo_id, self.addr_goal_current, current_u16),
         )
         self._raise_if_error(comm, err, 'write_goal_current')
 
     def read_present_position(self) -> int:
         data, comm, err = self._with_retry(
             'read_present_position',
-            lambda: self._packet.read4ByteTxRx(self._port, self._dxl_id, self.addr_present_position),
+            lambda: self._packet.read4ByteTxRx(self._port, self._servo_id, self.addr_present_position),
         )
         self._raise_if_error(comm, err, 'read_present_position')
         return int(data)
@@ -288,7 +303,7 @@ class DynamixelProtocol2Driver:
     def read_present_current(self) -> int:
         data, comm, err = self._with_retry(
             'read_present_current',
-            lambda: self._packet.read2ByteTxRx(self._port, self._dxl_id, self.addr_present_current),
+            lambda: self._packet.read2ByteTxRx(self._port, self._servo_id, self.addr_present_current),
         )
         self._raise_if_error(comm, err, 'read_present_current')
         raw = int(data) & 0xFFFF
@@ -303,7 +318,7 @@ class DynamixelServo:
         self._driver = DynamixelProtocol2Driver(
             device_name=config.device_name,
             baudrate=config.baudrate,
-            dxl_id=config.dxl_id,
+            servo_id=config.servo_id,
             addr_operating_mode=config.addr_operating_mode,
             addr_torque_enable=config.addr_torque_enable,
             addr_goal_current=config.addr_goal_current,
@@ -344,8 +359,17 @@ class DynamixelServo:
     def read_present_current(self) -> int:
         return self._driver.read_present_current()
 
+    def read_present_torque(self) -> float:
+        return self.config.current_raw_to_torque(self.read_present_current())
+
     def position_to_ticks(self, value: float) -> int:
         return self.config.position_to_ticks(value)
 
     def ticks_to_command_units(self, ticks: int) -> float:
         return self.config.ticks_to_command_units(ticks)
+
+    def torque_to_current_raw(self, torque: float) -> int:
+        return self.config.torque_to_current_raw(torque)
+
+    def current_raw_to_torque(self, current_raw: int) -> float:
+        return self.config.current_raw_to_torque(current_raw)

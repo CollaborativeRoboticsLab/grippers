@@ -170,7 +170,7 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
     def _log_gripper_action_request(self, action_name: str, *, torque: float, use_torque_mode: bool) -> None:
         self.get_logger().info(
-            f'{action_name} requested (torque={torque:.3f}, use_torque_mode={use_torque_mode})'
+            f'{action_name} requested (torque={torque:.3f}, use_torque_mode={use_torque_mode}, safety_torque_limit={self._servo_config.safety_torque_limit:.3f})'
         )
 
     def _log_gripper_action_result(self, action_name: str, result_message: str, *, success: bool) -> None:
@@ -191,7 +191,10 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             use_torque_mode=use_torque_mode,
             already_message='Servo already at open position.',
             success_message='Open command sent.',
+            torque_reached_message='Open reached the requested torque and is holding position.',
+            safety_limit_message='Open stopped at the safety torque limit and is holding position.',
             timeout_message='Open timed out or was canceled.',
+            canceled_message='Open was canceled.',
             failure_prefix='Open failed',
         )
         self._log_gripper_action_result('open_gripper', result.message, success=bool(result.success))
@@ -218,7 +221,10 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             use_torque_mode=use_torque_mode,
             already_message='Servo already at close position.',
             success_message='Close command sent.',
+            torque_reached_message='Close reached the requested torque and is holding position.',
+            safety_limit_message='Close stopped at the safety torque limit and is holding position.',
             timeout_message='Close timed out or was canceled.',
+            canceled_message='Close was canceled.',
             failure_prefix='Close failed',
         )
         self._log_gripper_action_result('close_gripper', result.message, success=bool(result.success))

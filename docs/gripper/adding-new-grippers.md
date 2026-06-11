@@ -24,10 +24,10 @@ If the new gripper has new CAD or linkage geometry:
 1. Add meshes under `gripper_description/meshes/<gripper-name>/`.
 2. Add a xacro macro under `gripper_description/xacro/`.
 3. Keep the macro parameterized with:
-	- `parent`
-	- `prefix`
-	- `xyz`
-	- `rpy`
+    - `parent`
+    - `prefix`
+    - `xyz`
+    - `rpy`
 4. Prefix every link and joint name with `${prefix}` to avoid collisions.
 5. Use stable joint names because the gripper action node may publish `joint_states` for those names.
 
@@ -37,12 +37,17 @@ For example, the current two-finger gripper macro is:
 
 When this macro is included by a larger robot description, the `prefix` argument should usually be the robot TF prefix.
 
+If you need to simulate the new gripper alone without rest of the robot, add/use a simulation launch file that includes the gripper xacro and starts `robot_state_publisher` with the resulting URDF.
+
+- [`gripper_ros/launch/gripper_sim.launch.py`](../gripper_ros/launch/gripper_sim.launch.py)
+- [`gripper_description/xacro/two-finger-gripper-standalone.urdf.xacro`](../gripper_description/xacro/two-finger-gripper-standalone.urdf.xacro)
+
 ## 2. Add Or Reuse A Motor Config
 
 Motor configs live in:
 
-- [`gripper_ros/config/motors/dynamixel.yaml`](../gripper_ros/config/motors/dynamixel.yaml)
-- [`gripper_ros/config/motors/feetech.yaml`](../gripper_ros/config/motors/feetech.yaml)
+- [`gripper_ros/config/servos/dynamixel.yaml`](../gripper_ros/config/servos/dynamixel.yaml)
+- [`gripper_ros/config/servos/feetech.yaml`](../gripper_ros/config/servos/feetech.yaml)
 
 Add a new motor preset when you need a new actuator family or a new reusable model-specific control table setup.
 
@@ -57,7 +62,7 @@ Use motor config files for parameters such as:
 
 Use the motor config as a reusable base, not as the final configuration for one concrete gripper.
 
-## 3. Add A Gripper Config Overlay
+## 3. Add A Gripper Config Overlay and Action Interface
 
 Gripper configs live in:
 
@@ -65,9 +70,7 @@ Gripper configs live in:
 
 Each file in this directory describes one complete gripper assembly.
 
-Important: the top-level YAML key must match the launched ROS node name.
-For example, the current two-finger wrapper uses `gripper_two_fingers_node`, while the
-low-level Dynamixel-only node uses `gripper_dynamixel_action_node`.
+Important: the top-level YAML key must match the launched ROS node name. For example, the current two-finger wrapper uses `gripper_two_fingers_node`, while the low-level Dynamixel-only node uses `gripper_dynamixel_action_node`.
 
 Current action ownership pattern:
 
@@ -205,7 +208,7 @@ For a new gripper, the typical checklist is:
 
 ## Related Docs
 
-- `docs/dynamixel.md`
-- `docs/feetech.md`
-- `docs/servo_action_interface.md`
-- `docs/gripper_action_interface.md`
+- `docs/servo/parameters.md`
+- `docs/servo/ros2-interface.md`
+- `docs/gripper/parameters.md`
+- `docs/gripper/ros2-interface.md`

@@ -2,7 +2,7 @@ gripper_two_fingers_node:
   ros__parameters:
     # Gripper-level selection: choose the motor preset and override the site-specific values
     # for this concrete gripper instance.
-    motor_model: XM430
+    motor_model: XM430-W350
 
     # Publish the two slider joints needed by robot_state_publisher.
     publish_gripper_joint_states: true
@@ -23,15 +23,17 @@ gripper_two_fingers_node:
       joint_open_position: -0.045
       joint_close_position: 0.0
 
-    XM430:
+    XM430-W350:
       device_name: /dev/ttyUSB0
       baudrate: 57600
-      dxl_id: 1
+      servo_id: 1
 
       position_is_radians: false
       open_position: 900.0
       close_position: 1950.0
 
+      control_torque: 0.5
       use_torque_mode: false
       default_torque: 0.0
+      safety_torque_limit: 1.0
       close_default: true

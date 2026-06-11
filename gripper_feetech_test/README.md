@@ -1,12 +1,32 @@
-gripper_feetech_test
-=====================
+# Gripper Feetech Test
 
-A small C++ (rclcpp) test node that simulates a Feetech gripper for integration and testing.
+This package provides a small C++ (rclcpp) test node that simulates a Feetech gripper for integration and testing.
 
-Build:
+This node follows the guidelines of [Gripper-level ROS2 interface](ros2-interface.md) and exposes, 
+- `/open_gripper` 
+- `/close_gripper`
+
+This builds on top of [Gripper Servo Feetech](../gripper_servo_feetech/README.md)
+
+## Quick start
+
+Run the hardware/gripper node:
 
 ```bash
-colcon build --packages-select gripper_feetech_test
+source install/setup.bash
+ros2 launch gripper_ros gripper_feetech_test.launch.py
 ```
 
-Run with existing launch files by updating references to the new package/executable where needed.
+### Open the gripper:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
+```
+
+### Close the gripper:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
+```

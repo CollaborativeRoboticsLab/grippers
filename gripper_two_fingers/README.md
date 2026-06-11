@@ -1,13 +1,13 @@
 # Gripper Two Fingers
 
-ROS 2 gripper-level wrapper for the two-finger Dynamixel gripper.
+This package provides a ROS 2 **action server** node for direct single-servo control of a Two finger gripper using **DynamixelSDK Protocol 2.0**.
 
-This package owns the gripper-facing action interface:
-
-- `/open_gripper`
+This node follows the guidelines of [Gripper-level ROS2 interface](ros2-interface.md) and exposes, 
+- `/open_gripper` 
 - `/close_gripper`
+- articulation publication for `robot_state_publisher` by publishing the mechanism `joint_states` needed to keep the TF tree connected.
 
-It also publishes the gripper articulation `joint_states` that drive the finger motion in `robot_state_publisher`.
+This builds on top of [Gripper Servo Dynamixel](../gripper_servo_dynamixel/README.md)
 
 ## What This Package Does
 
@@ -16,14 +16,17 @@ It also publishes the gripper articulation `joint_states` that drive the finger 
 - Maps servo feedback into the two slider joints used by the current URDF model
 - Keeps the simulated and physical gripper articulation aligned through the gripper config
 
-The current preferred articulation model is:
+For the current two-finger node, the preferred articulation model is now:
 
-- `gripper_planar_4` for the left finger slider
-- `gripper_planar_5` for the right finger slider
+- one **left finger** displacement parameter block
+- one **right finger** displacement parameter block
+- `gripper_two_fingers` publishing the two slider-joint states
+- `robot_state_publisher` handling the moving TF tree from those joint states
 
 Those joint positions are derived from the configured servo open/close range and published on `/joint_states`.
 
-## Launches
+
+## Quick start
 
 The launch ownership is intentionally split:
 
@@ -44,45 +47,118 @@ source install/setup.bash
 ros2 launch gripper_ros gripper_sim.launch.py model:=two-finger-gripper-standalone
 ```
 
-The sim launch does not start this node. It depends on the live `/joint_states` published by `gripper_two_fingers_node`.
+The sim launch depends on the live `/joint_states` published by `gripper_two_fingers_node`.
 
-## Actions
-
-Open the gripper:
+### Open the gripper:
 
 ```bash
 source install/setup.bash
 ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
 ```
 
-Close the gripper:
+### Close the gripper:
 
 ```bash
 source install/setup.bash
 ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
 ```
 
-## Configuration
+Close the gripper in torque mode using the goal torque value instead of the configured `control_torque`:
 
-The gripper-level runtime config is:
+```bash
+source install/setup.bash
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 5.0, use_torque_mode: true}"
+```
 
-- `gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`
+## Gripper-level two-finger mapping
 
-Key fields:
+At the gripper layer, the current preferred configuration is no longer a flat list of many mechanism joints.
+Instead, use a per-finger mapping:
+
+```yaml
+gripper_left_finger:
+  joint_name: gripper_planar_4
+  joint_open_position: -0.045
+  joint_close_position: 0.0
+
+gripper_right_finger:
+  joint_name: gripper_planar_5
+  joint_open_position: -0.045
+  joint_close_position: 0.0
+```
+
+Interpretation:
+
+- the measured motor position is converted into command units
+- that scalar is mapped into left/right slider travel using the configured servo open/close range
+- the resulting slider `joint_states` are consumed by `robot_state_publisher`
+
+The current URDF-backed public articulation joints are:
+
+- `gripper_planar_4`
+- `gripper_planar_5`
+
+If simulated motion is inverted relative to hardware, update only:
+
+- `gripper_left_finger.joint_open_position`
+- `gripper_left_finger.joint_close_position`
+- `gripper_right_finger.joint_open_position`
+- `gripper_right_finger.joint_close_position`
+
+in the runtime YAML instead of patching the Python node.
+
+For a single coupled servo, the intended physical model is usually:
+
+- `finger_displacement ~= total_gap_change / 2`
+
+because each finger moves approximately half the distance relative to the centerline.
+
+
+### Two layers of parameter configuration
+
+There are *two* parameter YAML layers:
+
+1. **Servo config** (in `gripper_ros`)
+    - File: `gripper_ros/config/servos/dynamixel.yaml`
+    - Contains the “site specific” choices: which motor model preset, which serial port, which ID, and your `open_position` / `close_position`.
+    - The current motor YAML uses a wildcard `/**` parameter root so both the low-level and gripper-level nodes can reuse the same motor defaults.
+
+2. **Gripper config** (in `gripper_ros`)
+    - File: `gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`
+    - Contains the “gripper specific” details: joint names, open/close positions, and torque-related parameters.
+
+## Gripper config
+
+For common gripper-level parameters, see [Gripper Parameter reference](../docs/gripper/parameters.md).
+
+### Joint mapping parameters
+
+Unique parameters for this two-finger node include following which are used to map the physical servo position into the simulated (rviz) slider joints:
 
 - `gripper_left_finger.joint_name`
 - `gripper_left_finger.joint_open_position`
 - `gripper_left_finger.joint_close_position`
+
 - `gripper_right_finger.joint_name`
 - `gripper_right_finger.joint_open_position`
 - `gripper_right_finger.joint_close_position`
 
-The current configuration maps servo feedback into the slider travel directly:
+The current configuration maps servo feedback into the urdf/robot_state_publisher slider travel directly:
 
-- open maps to `-0.045`
-- close maps to `0.0`
+- joint_open_position maps to `-0.045`
+- joint_close_position maps to `0.0`
 
 If simulated motion is reversed relative to hardware, adjust only the `joint_open_position` and `joint_close_position` values in the gripper YAML.
+
+### Servo parameter overrides
+
+Overriding servo parameters from the gripper config:
+
+- `XM430.control_torque`: default torque request used in torque mode when the goal torque is `0.0`
+- `XM430.use_torque_mode`: default torque-mode behavior when the goal does not explicitly enable it
+- `XM430.default_torque`: used when goal `torque` is `0.0`
+- `XM430.safety_torque_limit`: stop threshold used while running in position mode
+- `XM430.use_torque_mode`: default action mode when the goal does not explicitly request one
 
 ## TF Tree
 
