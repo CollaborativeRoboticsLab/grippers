@@ -61,6 +61,6 @@ The action goal field is named `torque`, but its meaning is intentionally **driv
 
 - For `ServoControl`, a nonzero `torque` value typically implies a torque-limited or current-limited position command.
 - A Dynamixel-based driver interprets it in the configured torque units and converts it to Goal Current internally using `torque_per_current_unit`. If that parameter is calibrated in Nm, then the action `torque` value is effectively in Nm as well.
-- A Feetech STS/SCS-based driver currently treats it like a torque-limit register value or driver-specific effort value, not a calibrated physical torque unit.
+- A Feetech STS/SCS-based driver can also map the action `torque` value into configured torque units when `torque_limit_per_torque_unit` and `torque_per_current_unit` are calibrated, but it remains an approximation built on a torque-limit register rather than true current-based position control.
 
 See the driver-specific docs for how that value is used.

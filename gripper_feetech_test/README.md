@@ -30,3 +30,16 @@ ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.
 source install/setup.bash
 ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
 ```
+
+Close in approximate torque mode:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.5, use_torque_mode: true}"
+```
+
+The Feetech test wrapper now mirrors the updated torque-monitoring behavior from the low-level Feetech node:
+
+- Position mode stops and holds position if measured torque exceeds `safety_torque_limit`.
+- Torque mode uses `control_torque` unless the goal provides a non-zero `torque`.
+- The implementation is still approximate because the underlying servo path uses a torque-limit register rather than true current-based position control.

@@ -21,6 +21,10 @@
 
     # Torque limiting (Feetech-style "torque mode" implemented as a torque limit)
     use_torque_mode: false
+    torque_per_current_unit: 1.0
+    torque_limit_per_torque_unit: 1.0
+    control_torque: 0.0
+    safety_torque_limit: 0.0
     default_torque_limit: 0.0
     torque_limit_register: 48  # 0x30 TORQUE_LIMIT
 

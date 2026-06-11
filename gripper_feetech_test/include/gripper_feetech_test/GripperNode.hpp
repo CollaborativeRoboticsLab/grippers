@@ -156,14 +156,17 @@ private:
 		publish_gripper_joint_states(ticks_to_command_units(position_ticks));
 	}
 
+	void handle_torque_feedback(double) override {}
+
 	void log_gripper_action_request(const char * action_name, double torque, bool use_torque_mode)
 	{
 		RCLCPP_INFO(
 			this->get_logger(),
-			"%s requested (torque=%.3f, use_torque_mode=%s)",
+			"%s requested (torque=%.3f, use_torque_mode=%s, safety_torque_limit=%.3f)",
 			action_name,
 			torque,
-			use_torque_mode ? "true" : "false");
+			use_torque_mode ? "true" : "false",
+			this->get_parameter("safety_torque_limit").as_double());
 	}
 
 	void log_gripper_action_result(const char * action_name, const std::string & message, bool success)
@@ -203,12 +206,13 @@ private:
 			poll_rate = 30.0;
 		}
 		const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
-		log_gripper_action_request("open_gripper", goal->torque, use_torque_mode);
+		const double torque = resolve_torque(goal->torque);
+		log_gripper_action_request("open_gripper", torque, use_torque_mode);
 
 		try {
 			ensure_connected();
 			if (use_torque_mode) {
-				apply_torque_limit(resolve_torque_limit(goal->torque));
+				apply_torque_limit(torque_to_limit_raw(torque));
 			}
 
 			const int target_ticks = position_to_ticks(open_pos);
@@ -226,7 +230,7 @@ private:
 			apply_position_target(target_ticks, speed);
 			auto feedback = std::make_shared<OpenGripper::Feedback>();
 
-			const bool ok = run_motion_loop(
+			const auto motion_result = run_motion_loop(
 				[goal_handle]() { return goal_handle->is_canceling(); },
 				[goal_handle]() {
 					auto result = std::make_shared<OpenGripper::Result>();
@@ -240,8 +244,14 @@ private:
 				tolerance,
 				timeout,
 				poll_rate,
+				use_torque_mode,
+				torque,
+				this->get_parameter("safety_torque_limit").as_double(),
 				feedback);
-			if (!ok) {
+			if (!motion_result.success) {
+				if (motion_result.reason == "canceled") {
+					return;
+				}
 				auto result = std::make_shared<OpenGripper::Result>();
 				result->success = false;
 				result->message = "Open timed out.";
@@ -252,7 +262,13 @@ private:
 
 			auto result = std::make_shared<OpenGripper::Result>();
 			result->success = true;
-			result->message = "Open command sent.";
+			if (motion_result.reason == "target_torque_reached") {
+				result->message = "Open reached the requested torque and is holding position.";
+			} else if (motion_result.reason == "safety_torque_limit_reached") {
+				result->message = "Open stopped at the safety torque limit and is holding position.";
+			} else {
+				result->message = "Open command sent.";
+			}
 			log_gripper_action_result("open_gripper", result->message, true);
 			goal_handle->succeed(result);
 		} catch (const std::exception & e) {
@@ -286,7 +302,8 @@ private:
 		const bool close_default = this->get_parameter("close_default").as_bool();
 		const bool close_requested = goal->close || close_default;
 		const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
-		log_gripper_action_request("close_gripper", goal->torque, use_torque_mode);
+		const double torque = resolve_torque(goal->torque);
+		log_gripper_action_request("close_gripper", torque, use_torque_mode);
 
 		if (!close_requested) {
 			auto result = std::make_shared<CloseGripper::Result>();
@@ -309,7 +326,7 @@ private:
 		try {
 			ensure_connected();
 			if (use_torque_mode) {
-				apply_torque_limit(resolve_torque_limit(goal->torque));
+				apply_torque_limit(torque_to_limit_raw(torque));
 			}
 
 			const int target_ticks = position_to_ticks(close_pos);
@@ -327,7 +344,7 @@ private:
 			apply_position_target(target_ticks, speed);
 			auto feedback = std::make_shared<CloseGripper::Feedback>();
 
-			const bool ok = run_motion_loop(
+			const auto motion_result = run_motion_loop(
 				[goal_handle]() { return goal_handle->is_canceling(); },
 				[goal_handle]() {
 					auto result = std::make_shared<CloseGripper::Result>();
@@ -341,8 +358,14 @@ private:
 				tolerance,
 				timeout,
 				poll_rate,
+				use_torque_mode,
+				torque,
+				this->get_parameter("safety_torque_limit").as_double(),
 				feedback);
-			if (!ok) {
+			if (!motion_result.success) {
+				if (motion_result.reason == "canceled") {
+					return;
+				}
 				auto result = std::make_shared<CloseGripper::Result>();
 				result->success = false;
 				result->message = "Close timed out.";
@@ -353,7 +376,13 @@ private:
 
 			auto result = std::make_shared<CloseGripper::Result>();
 			result->success = true;
-			result->message = "Close command sent.";
+			if (motion_result.reason == "target_torque_reached") {
+				result->message = "Close reached the requested torque and is holding position.";
+			} else if (motion_result.reason == "safety_torque_limit_reached") {
+				result->message = "Close stopped at the safety torque limit and is holding position.";
+			} else {
+				result->message = "Close command sent.";
+			}
 			log_gripper_action_result("close_gripper", result->message, true);
 			goal_handle->succeed(result);
 		} catch (const std::exception & e) {

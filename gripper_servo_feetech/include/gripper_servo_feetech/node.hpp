@@ -6,6 +6,7 @@
 #include <cmath>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -25,6 +26,12 @@ namespace gripper_servo_feetech
 class FeetechGripperActionNode : public rclcpp::Node
 {
 public:
+	struct MotionLoopResult
+	{
+		bool success;
+		std::string reason;
+	};
+
 	explicit FeetechGripperActionNode(const rclcpp::NodeOptions & options)
 	: FeetechGripperActionNode("gripper_servo_feetech_action_node", options, true)
 	{
@@ -59,6 +66,10 @@ public:
 
 		// Torque limiting behavior (used as an approximation of torque-mode)
 		this->declare_parameter<bool>("use_torque_mode", false);
+		this->declare_parameter<double>("torque_per_current_unit", 1.0);
+		this->declare_parameter<double>("torque_limit_per_torque_unit", 1.0);
+		this->declare_parameter<double>("control_torque", 0.0);
+		this->declare_parameter<double>("safety_torque_limit", 0.0);
 		this->declare_parameter<double>("default_torque_limit", 0.0);
 		this->declare_parameter<int>("torque_limit_register", static_cast<int>(STSRegisters::TORQUE_LIMIT));
 		this->declare_parameter<bool>("close_default", true);
@@ -83,6 +94,7 @@ protected:
 	using GoalHandleServoControl = rclcpp_action::ServerGoalHandle<ServoControl>;
 
 	virtual void handle_position_feedback(int) {}
+	virtual void handle_torque_feedback(double) {}
 
 	rclcpp_action::GoalResponse handle_goal_servo_control(
 		const rclcpp_action::GoalUUID &, std::shared_ptr<const ServoControl::Goal>)
@@ -115,13 +127,32 @@ protected:
 		return std::abs(target_ticks - current_ticks) <= tolerance_ticks;
 	}
 
-	int resolve_torque_limit(double requested) const
+	double resolve_torque(double requested) const
 	{
 		double v = requested;
 		if (std::abs(v) <= 0.0) {
-			v = this->get_parameter("default_torque_limit").as_double();
+			const double control_torque = this->get_parameter("control_torque").as_double();
+			if (std::abs(control_torque) > 0.0) {
+				return control_torque;
+			}
+
+			const double default_torque_limit = this->get_parameter("default_torque_limit").as_double();
+			const double torque_limit_scale = this->get_parameter("torque_limit_per_torque_unit").as_double();
+			if (std::abs(default_torque_limit) > 0.0 && torque_limit_scale > 0.0) {
+				return default_torque_limit / torque_limit_scale;
+			}
+			v = default_torque_limit;
 		}
-		return static_cast<int>(std::lround(v));
+		return v;
+	}
+
+	int torque_to_limit_raw(double torque) const
+	{
+		const double torque_limit_scale = this->get_parameter("torque_limit_per_torque_unit").as_double();
+		if (torque_limit_scale > 0.0) {
+			return static_cast<int>(std::lround(torque * torque_limit_scale));
+		}
+		return static_cast<int>(std::lround(torque));
 	}
 
 	int position_to_ticks(double position_value) const
@@ -158,6 +189,11 @@ protected:
 
 		return (static_cast<double>(position_ticks) - static_cast<double>(zero)) /
 			(static_cast<double>(direction) * ticks_per_rad);
+	}
+
+	double current_to_torque(double current_value) const
+	{
+		return current_value * this->get_parameter("torque_per_current_unit").as_double();
 	}
 
 	void ensure_connected()
@@ -204,6 +240,20 @@ protected:
 		return driver_->getCurrentPosition(servo_id);
 	}
 
+	double read_present_current()
+	{
+		ensure_connected();
+		const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
+		return static_cast<double>(driver_->getCurrentCurrent(servo_id));
+	}
+
+	double read_present_torque()
+	{
+		const double current_torque = current_to_torque(read_present_current());
+		handle_torque_feedback(current_torque);
+		return current_torque;
+	}
+
 	void apply_torque_limit(int torque_limit_raw)
 	{
 		ensure_connected();
@@ -220,8 +270,15 @@ protected:
 		(void)driver_->setTargetPosition(servo_id, target_ticks, speed, false);
 	}
 
+	int hold_current_position(std::optional<int> current_ticks = std::nullopt)
+	{
+		const int hold_ticks = current_ticks.has_value() ? *current_ticks : read_present_position_ticks();
+		apply_position_target(hold_ticks, this->get_parameter("speed").as_int());
+		return hold_ticks;
+	}
+
 	template<typename FeedbackT>
-	bool run_motion_loop(
+	MotionLoopResult run_motion_loop(
 		const std::function<bool()> & is_canceling,
 		const std::function<void()> & on_cancel,
 		const std::function<void(float)> & publish_feedback,
@@ -230,6 +287,9 @@ protected:
 		int tolerance,
 		double timeout,
 		double poll_rate,
+		bool use_torque_mode,
+		double target_torque,
+		double safety_torque_limit,
 		FeedbackT & feedback)
 	{
 		const auto servo_id = static_cast<byte>(this->get_parameter("servo_id").as_int());
@@ -239,16 +299,31 @@ protected:
 		while (rclcpp::ok()) {
 			if (is_canceling()) {
 				on_cancel();
-				return false;
+				return MotionLoopResult{false, "canceled"};
 			}
 
 			const int pos = driver_->getCurrentPosition(servo_id);
 			handle_position_feedback(pos);
+			const double applied_torque = read_present_torque();
 			const int err = std::abs(target_ticks - pos);
 			if (err <= tolerance) {
 				feedback->progress = 1.0f;
 				publish_feedback(1.0f);
-				return true;
+				return MotionLoopResult{true, "position_reached"};
+			}
+
+			if (use_torque_mode && std::abs(target_torque) > 0.0 && std::abs(applied_torque) >= std::abs(target_torque)) {
+				hold_current_position(pos);
+				feedback->progress = 1.0f;
+				publish_feedback(1.0f);
+				return MotionLoopResult{true, "target_torque_reached"};
+			}
+
+			if (safety_torque_limit > 0.0 && std::abs(applied_torque) >= std::abs(safety_torque_limit)) {
+				hold_current_position(pos);
+				feedback->progress = 1.0f;
+				publish_feedback(1.0f);
+				return MotionLoopResult{true, "safety_torque_limit_reached"};
 			}
 
 			const float progress = static_cast<float>(std::clamp(
@@ -260,13 +335,13 @@ protected:
 				std::chrono::steady_clock::now() - start_time)
 										.count();
 			if (elapsed > timeout) {
-				return false;
+				return MotionLoopResult{false, "timeout"};
 			}
 
 			std::this_thread::sleep_for(std::chrono::duration<double>(1.0 / poll_rate));
 		}
 
-		return false;
+		return MotionLoopResult{false, "shutdown"};
 	}
 
 	void execute_servo_control(const std::shared_ptr<GoalHandleServoControl> goal_handle)
@@ -279,11 +354,13 @@ protected:
 		if (poll_rate <= 0.0) {
 			poll_rate = 30.0;
 		}
+		const double torque = resolve_torque(goal->torque);
+		const bool use_torque_mode = resolve_servo_control_use_torque_mode(goal->torque);
 
 		try {
 			ensure_connected();
-			if (resolve_servo_control_use_torque_mode(goal->torque)) {
-				apply_torque_limit(resolve_torque_limit(goal->torque));
+			if (use_torque_mode) {
+				apply_torque_limit(torque_to_limit_raw(torque));
 			}
 
 			const int target_ticks = position_to_ticks(goal->position);
@@ -300,7 +377,7 @@ protected:
 			apply_position_target(target_ticks, speed);
 
 			auto feedback = std::make_shared<ServoControl::Feedback>();
-			const bool ok = run_motion_loop(
+			const auto motion_result = run_motion_loop(
 				[goal_handle]() { return goal_handle->is_canceling(); },
 				[goal_handle]() {
 					auto result = std::make_shared<ServoControl::Result>();
@@ -314,9 +391,15 @@ protected:
 				tolerance,
 				timeout,
 				poll_rate,
+				use_torque_mode,
+				torque,
+				this->get_parameter("safety_torque_limit").as_double(),
 				feedback);
 
-			if (!ok) {
+			if (!motion_result.success) {
+				if (motion_result.reason == "canceled") {
+					return;
+				}
 				auto result = std::make_shared<ServoControl::Result>();
 				result->success = false;
 				result->message = "Servo control timed out.";
@@ -326,7 +409,13 @@ protected:
 
 			auto result = std::make_shared<ServoControl::Result>();
 			result->success = true;
-			result->message = "Servo command sent.";
+			if (motion_result.reason == "target_torque_reached") {
+				result->message = "Servo reached the requested torque and is holding position.";
+			} else if (motion_result.reason == "safety_torque_limit_reached") {
+				result->message = "Servo reached the safety torque limit and is holding position.";
+			} else {
+				result->message = "Servo command sent.";
+			}
 			goal_handle->succeed(result);
 		} catch (const std::exception & e) {
 			auto result = std::make_shared<ServoControl::Result>();

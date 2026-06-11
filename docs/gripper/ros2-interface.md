@@ -82,11 +82,12 @@ ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: t
 
 ## Notes on `torque`
 
-The action goal field is still driver-specific, but the Dynamixel path now supports a calibrated torque interpretation when `torque_per_current_unit` is configured:
+The action goal field is still driver-specific, but both servo backends now support a configurable torque interpretation:
 
-- If `torque_per_current_unit` is calibrated in Nm, then the action goal `torque` value is also in Nm for the Dynamixel path.
-- In Dynamixel position mode, the node monitors measured torque and stops at `safety_torque_limit` without reopening the gripper.
-- In Dynamixel torque mode, the node uses `control_torque` unless the goal sends a non-zero `torque`, and it stops once the requested torque is reached while holding position.
-- Feetech STS/SCS drivers continue to interpret the field using their torque-limit register semantics.
+- Dynamixel: if `torque_per_current_unit` is calibrated in Nm, then the action goal `torque` value is also in Nm.
+- Dynamixel position mode monitors measured torque and stops at `safety_torque_limit` without reopening the gripper.
+- Dynamixel torque mode uses `control_torque` unless the goal sends a non-zero `torque`, and it stops once the requested torque is reached while holding position.
+- Feetech: if `torque_limit_per_torque_unit` and `torque_per_current_unit` are calibrated, the action goal `torque` can also be interpreted in configured torque units.
+- Feetech still uses an approximate torque mode implemented through a torque-limit register plus current monitoring, not true current-based position control.
 
-If you want to command physical units such as Nm, calibrate the active driver so one action-unit maps consistently to measured torque.
+If you want to command physical units such as Nm, calibrate the active driver so one action-unit maps consistently to the driver's measured torque estimate.

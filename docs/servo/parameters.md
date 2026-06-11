@@ -34,19 +34,24 @@ Following are the common parameters for most servo configurations. Check the spe
 
 ## Servo Torque mode
 
+### Common torque-mode parameters
+
+- `use_torque_mode` (bool): default torque-mode behavior if the action goal does not explicitly enable it
+- `control_torque` (float): default torque request used in torque mode when the action goal leaves `torque` at `0.0`
+- `safety_torque_limit` (float): position-mode safety threshold; when reached, the node holds the current position instead of reopening
+- `close_default` (bool): used when close goal’s boolean flag is default-constructed / false
+
 ### Dynamixel-specific
 
 - `torque_per_current_unit` (float): conversion from Dynamixel present-current units to your chosen torque units; set this if you want action goals and monitoring in Nm
-- `control_torque` (float): default torque request used in torque mode when the action goal leaves `torque` at `0.0`
-- `use_torque_mode` (bool): default torque-mode behavior if the action goal does not explicitly enable it
 - `default_torque` (float): used when goal `torque` is `0.0`
-- `safety_torque_limit` (float): position-mode safety threshold; when reached, the node holds the current position instead of reopening
-- `close_default` (bool): used when close goal’s boolean flag is default-constructed / false
 
 ### Feetech-specific
 
 - `speed` (int): motion speed parameter used by the Feetech node (e.g. `4095`)
-- `default_torque_limit` (float): default Feetech torque-limit register value used when the action goal leaves `torque` at `0.0`
+- `torque_per_current_unit` (float): conversion from Feetech present-current values to your chosen torque units; the vendored driver currently returns current in amps
+- `torque_limit_per_torque_unit` (float): conversion from your chosen torque units into the Feetech torque-limit register units
+- `default_torque_limit` (float): legacy/raw Feetech torque-limit register fallback used when no calibrated torque request is available
 - `torque_limit_register` (int): register address used for the Feetech torque limit
 
 ## Servo Communication retry behavior
@@ -83,7 +88,8 @@ These *must* match your motor model’s control table register addresses for the
 
 - Position mode keeps moving toward the requested open/close target until it reaches the target or the measured torque exceeds `safety_torque_limit`.
 - When the safety limit is hit, the node writes the current position back as the hold target, so the gripper stops without reopening.
-- Torque mode uses `control_torque` unless the action goal supplies a non-zero `torque`, and it stops once the requested torque is reached while keeping the current position.
+- Dynamixel torque mode uses `control_torque` unless the action goal supplies a non-zero `torque`, and it stops once the requested torque is reached while keeping the current position.
+- Feetech torque mode is an approximation: it applies a torque-limit register value derived from the requested torque and stops once the measured torque estimate reaches the requested threshold.
 
 ## Calibrating `torque_per_current_unit`
 
@@ -113,8 +119,14 @@ If you are using `XM430-W350`, a reasonable starting YAML value is:
 torque_per_current_unit: 0.00480
 ```
 
+For Feetech STS/SCS servos, the vendored driver currently reports present current in amps. To interpret action `torque`, `control_torque`, and `safety_torque_limit` in physical units such as Nm, you need two empirical calibrations:
+
+- `torque_per_current_unit`: converts measured current (amps) into your chosen torque units
+- `torque_limit_per_torque_unit`: converts your chosen torque units into the Feetech torque-limit register units
+
 ## Practical note:
 
 - These are first-pass estimates based on stall specs, not precise gripping-force calibration.
 - Real gripping torque depends on voltage, temperature, gearbox losses, and your linkage.
-- The best way to finalize `torque_per_current_unit` is to start from the datasheet estimate, log `Present Current`, and calibrate against a measured external torque or fingertip force on your mechanism.
+- The best way to finalize `torque_per_current_unit` is to start from the datasheet estimate where available, log present current, and calibrate against a measured external torque or fingertip force on your mechanism.
+- For Feetech, the resulting behavior is still approximate because the driver uses a torque-limit register rather than true current-based position control.
