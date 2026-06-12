@@ -18,13 +18,18 @@
     goal_tolerance_ticks: 20
     motion_timeout_sec: 3.0
     poll_rate_hz: 30.0
+    status_publish_rate_hz: 1.0
 
     # Torque limiting (Feetech-style "torque mode" implemented as a torque limit)
     use_torque_mode: false
+    # Conservative starter calibration:
+    # - The vendored driver reports present current in amps.
+    # - With torque_per_current_unit=1.0, the action 'torque' units are initially amps
+    #   until you calibrate them to physical torque units such as Nm.
     torque_per_current_unit: 1.0
-    torque_limit_per_torque_unit: 1.0
-    control_torque: 0.0
-    safety_torque_limit: 0.0
+    torque_limit_per_torque_unit: 50.0
+    control_torque: 0.5
+    safety_torque_limit: 1.0
     default_torque_limit: 0.0
     torque_limit_register: 48  # 0x30 TORQUE_LIMIT
 

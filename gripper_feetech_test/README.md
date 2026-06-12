@@ -28,14 +28,14 @@ ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.0, use_torque_mode: false}"
 ```
 
 Close in approximate torque mode:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.5, use_torque_mode: true}"
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.5, use_torque_mode: true}"
 ```
 
 The Feetech test wrapper now mirrors the updated torque-monitoring behavior from the low-level Feetech node:

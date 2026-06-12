@@ -63,6 +63,7 @@ public:
 		this->declare_parameter<int>("goal_tolerance_ticks", 20);
 		this->declare_parameter<double>("motion_timeout_sec", 3.0);
 		this->declare_parameter<double>("poll_rate_hz", 30.0);
+		this->declare_parameter<double>("status_publish_rate_hz", 1.0);
 
 		// Torque limiting behavior (used as an approximation of torque-mode)
 		this->declare_parameter<bool>("use_torque_mode", false);
@@ -81,6 +82,13 @@ public:
 				std::bind(&FeetechGripperActionNode::handle_goal_servo_control, this, std::placeholders::_1, std::placeholders::_2),
 				std::bind(&FeetechGripperActionNode::handle_cancel_servo_control, this, std::placeholders::_1),
 				std::bind(&FeetechGripperActionNode::handle_accepted_servo_control, this, std::placeholders::_1));
+		}
+
+		const double status_rate = this->get_parameter("status_publish_rate_hz").as_double();
+		if (status_rate > 0.0) {
+			status_timer_ = this->create_wall_timer(
+				std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / status_rate)),
+				std::bind(&FeetechGripperActionNode::publish_status, this));
 		}
 
 		RCLCPP_INFO(this->get_logger(), "Feetech gripper action node ready.");
@@ -110,6 +118,27 @@ protected:
 	void handle_accepted_servo_control(const std::shared_ptr<GoalHandleServoControl> goal_handle)
 	{
 		std::thread{std::bind(&FeetechGripperActionNode::execute_servo_control, this, goal_handle)}.detach();
+	}
+
+	void publish_status()
+	{
+		try {
+			const int ticks = read_present_position_ticks();
+			handle_position_feedback(ticks);
+			const double position = ticks_to_command_units(ticks);
+			const double current = read_present_current();
+			const double torque = current_to_torque(current);
+			handle_torque_feedback(torque);
+			RCLCPP_INFO(
+				this->get_logger(),
+				"Present position: %.3f (%d ticks), present current: %.4f A, present torque: %.4f",
+				position,
+				ticks,
+				current,
+				torque);
+		} catch (const std::exception & e) {
+			RCLCPP_WARN(this->get_logger(), "Unable to read Feetech status: %s", e.what());
+		}
 	}
 
 	bool resolve_use_torque_mode(bool goal_flag) const
@@ -431,6 +460,7 @@ private:
 	std::unique_ptr<STSServoDriver> driver_;
 
 	rclcpp_action::Server<ServoControl>::SharedPtr servo_control_server_;
+	rclcpp::TimerBase::SharedPtr status_timer_;
 };
 
 }  // namespace gripper_servo_feetech

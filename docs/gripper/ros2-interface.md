@@ -13,34 +13,46 @@ The intended ownership is:
 
 Goal:
 
-- `torque` (float): requested torque/effort value; a non-zero goal overrides the node's configured control torque
-- `use_torque_mode` (bool): if true, the driver may apply torque/current limiting
+| Field | Type | Description |
+| --- | --- | --- |
+| `torque` | `float` | Requested torque or effort value. A non-zero goal overrides the node's configured control torque. |
+| `use_torque_mode` | `bool` | If `true`, the driver may apply torque or current limiting. |
 
 Result:
 
-- `success` (bool)
-- `message` (string)
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` | `bool` | Indicates whether the gripper command completed successfully. |
+| `message` | `string` | Driver or controller status message for the completed command. |
 
 Feedback:
 
-- `progress` (float32): $0.0 \rightarrow 1.0$ best-effort progress estimate
+| Field | Type | Description |
+| --- | --- | --- |
+| `progress` | `float32` | Best-effort progress estimate from $0.0$ to $1.0$. |
 
 ### `gripper_msgs/action/CloseGripper`
 
 Goal:
 
-- `close` (bool): whether to close (some nodes also support `close_default` as a parameter so `{}` still closes)
-- `torque` (float): requested torque/effort value; a non-zero goal overrides the node's configured control torque
-- `use_torque_mode` (bool)
+| Field | Type | Description |
+| --- | --- | --- |
+| `close_ratio` | `float` | Requested close amount. `1.0` closes fully, `0.3` closes part-way, and `0.0` falls back to the node's configured default close behavior. |
+| `torque` | `float` | Requested torque or effort value. A non-zero goal overrides the node's configured control torque. |
+| `use_torque_mode` | `bool` | If `true`, the driver may apply torque or current limiting. |
 
 Result:
 
-- `success` (bool)
-- `message` (string)
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` | `bool` | Indicates whether the gripper command completed successfully. |
+| `message` | `string` | Driver or controller status message for the completed command. |
 
 Feedback:
 
-- `progress` (float32)
+| Field | Type | Description |
+| --- | --- | --- |
+| `progress` | `float32` | Best-effort progress estimate from $0.0$ to $1.0$. |
 
 ## CLI usage
 
@@ -70,14 +82,21 @@ Send a close gripper:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.0, use_torque_mode: false}"
+```
+
+Send a partial close:
+
+```bash
+source install/setup.bash
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 0.3, torque: 0.0, use_torque_mode: false}"
 ```
 
 Close with torque/current limiting (if supported by the active driver):
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.5, use_torque_mode: true}"
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.5, use_torque_mode: true}"
 ```
 
 ## Notes on `torque`

@@ -64,7 +64,7 @@ To close gripper:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close: true, torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.0, use_torque_mode: false}"
 ```
 
 Read the [gripper action interface docs](docs/gripper/ros2-interface.md) for more details on open/close goal fields and CLI usage.

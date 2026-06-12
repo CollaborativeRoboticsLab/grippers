@@ -13,17 +13,23 @@ The intended ownership is:
 
 Goal:
 
-- `position` (float): target servo position in the configured command units
-- `torque` (float): optional torque request; interpretation depends on the active driver
+| Field | Type | Description |
+| --- | --- | --- |
+| `position` | `float` | Target servo position in the configured command units. |
+| `torque` | `float` | Optional torque request; interpretation depends on the active driver. |
 
 Result:
 
-- `success` (bool)
-- `message` (string)
+| Field | Type | Description |
+| --- | --- | --- |
+| `success` | `bool` | Indicates whether the servo command completed successfully. |
+| `message` | `string` | Driver or controller status message for the completed command. |
 
 Feedback:
 
-- `progress` (float32): $0.0 \rightarrow 1.0$ best-effort progress estimate
+| Field | Type | Description |
+| --- | --- | --- |
+| `progress` | `float32` | Best-effort progress estimate from $0.0$ to $1.0$. |
 
 ## CLI usage
 

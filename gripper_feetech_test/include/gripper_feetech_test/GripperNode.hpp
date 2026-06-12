@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <vector>
@@ -178,6 +179,24 @@ private:
 		}
 	}
 
+	double resolve_close_ratio(double requested_ratio) const
+	{
+		if (requested_ratio > 0.0) {
+			return std::clamp(requested_ratio, 0.0, 1.0);
+		}
+		if (this->get_parameter("close_default").as_bool()) {
+			return 1.0;
+		}
+		return 0.0;
+	}
+
+	double interpolate_close_target(double close_ratio) const
+	{
+		const double open_pos = this->get_parameter("open_position").as_double();
+		const double close_pos = this->get_parameter("close_position").as_double();
+		return open_pos + ((close_pos - open_pos) * close_ratio);
+	}
+
 	rclcpp_action::GoalResponse handle_goal_open(
 		const rclcpp_action::GoalUUID &, std::shared_ptr<const OpenGripper::Goal>)
 	{
@@ -299,22 +318,21 @@ private:
 	void execute_close(const std::shared_ptr<GoalHandleClose> goal_handle)
 	{
 		const auto goal = goal_handle->get_goal();
-		const bool close_default = this->get_parameter("close_default").as_bool();
-		const bool close_requested = goal->close || close_default;
+		const double close_ratio = resolve_close_ratio(goal->close_ratio);
 		const bool use_torque_mode = resolve_use_torque_mode(goal->use_torque_mode);
 		const double torque = resolve_torque(goal->torque);
 		log_gripper_action_request("close_gripper", torque, use_torque_mode);
 
-		if (!close_requested) {
+		if (close_ratio <= 0.0) {
 			auto result = std::make_shared<CloseGripper::Result>();
 			result->success = true;
-			result->message = "Close goal flag was false; no action taken.";
+			result->message = "Close ratio was non-positive and close_default is false; no action taken.";
 			log_gripper_action_result("close_gripper", result->message, true);
 			goal_handle->succeed(result);
 			return;
 		}
 
-		const double close_pos = this->get_parameter("close_position").as_double();
+		const double close_pos = interpolate_close_target(close_ratio);
 		const int speed = this->get_parameter("speed").as_int();
 		const int tolerance = this->get_parameter("goal_tolerance_ticks").as_int();
 		const double timeout = this->get_parameter("motion_timeout_sec").as_double();
@@ -335,7 +353,7 @@ private:
 			if (is_at_target(current_pos, target_ticks, tolerance)) {
 				auto result = std::make_shared<CloseGripper::Result>();
 				result->success = true;
-				result->message = "Gripper already closed.";
+				result->message = "Gripper already at requested close ratio.";
 				log_gripper_action_result("close_gripper", result->message, true);
 				goal_handle->succeed(result);
 				return;
@@ -377,11 +395,11 @@ private:
 			auto result = std::make_shared<CloseGripper::Result>();
 			result->success = true;
 			if (motion_result.reason == "target_torque_reached") {
-				result->message = "Close reached the requested torque and is holding position.";
+				result->message = "Close ratio reached the requested torque and is holding position.";
 			} else if (motion_result.reason == "safety_torque_limit_reached") {
-				result->message = "Close stopped at the safety torque limit and is holding position.";
+				result->message = "Close ratio stopped at the safety torque limit and is holding position.";
 			} else {
-				result->message = "Close command sent.";
+				result->message = "Close ratio command sent.";
 			}
 			log_gripper_action_result("close_gripper", result->message, true);
 			goal_handle->succeed(result);

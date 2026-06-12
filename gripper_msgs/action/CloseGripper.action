@@ -1,6 +1,8 @@
 # Goal
-# If false (default-constructed goal), the node may use a configured default (typically true).
-bool close
+# Requested close amount in the range (0.0, 1.0].
+# 1.0 closes fully. Values between 0.0 and 1.0 close proportionally.
+# If the goal leaves this at 0.0, the node may use a configured default close behavior.
+float64 close_ratio
 
 # Requested torque to use in torque-mode. If 0.0, the node may use a configured default.
 float64 torque

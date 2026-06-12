@@ -2,67 +2,92 @@
 
 ## Config selection
 
-- `motor_model` (string): selects the nested preset under `gripper_ros/config/servos/dynamixel.yaml` or `gripper_ros/config/servos/feetech.yaml`, depending on the launched node.
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `motor_model` | `string` | Selects the nested preset under `gripper_ros/config/servos/dynamixel.yaml` or `gripper_ros/config/servos/feetech.yaml`, depending on the launched node. |
+
+## Node/runtime behavior
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `shutdown_on_init_failure` | `bool` | Dynamixel-specific. If `true`, the Dynamixel node raises initialization failures instead of staying alive after a startup error. |
 
 Following are the common parameters for most servo configurations. Check the specific YAML files for your motor model for the actual values.
 
 
 ## Servo Transport
 
-- `device_name` (string): serial port, e.g. `/dev/ttyUSB0`
-- `baudrate` (int): serial baud rate
-- `servo_id` (int): motor ID
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `device_name` | `string` | Serial port, for example `/dev/ttyUSB0`. |
+| `baudrate` | `int` | Serial baud rate. |
+| `servo_id` | `int` | Motor ID. |
 
 ## Servo Position scaling
 
-- `position_is_radians` (bool) - if true, `open_position` and `close_position` are interpreted as radians and converted to ticks internally; if false, they are treated as raw ticks directly
-- `ticks_per_rev` (int) - number of ticks per full revolution (before gear reduction)
-- `gear_ratio` (float) - gear reduction ratio (e.g. `1.0` for no reduction, `2.0` for 2:1 reduction)
-- `direction` (int, usually `+1` or `-1`) - multiplier for inverting direction if the motor moves opposite to the expected direction
-- `zero_offset_ticks` (int) - zero position offset in ticks (e.g. if your motor's zero position is at 512 ticks, set this to 512 so that `open_position: 0.0` corresponds to the physical open position)
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `position_is_radians` | `bool` | If `true`, `open_position` and `close_position` are interpreted as radians and converted to ticks internally; if `false`, they are treated as raw ticks directly. |
+| `ticks_per_rev` | `int` | Number of ticks per full revolution before gear reduction. |
+| `gear_ratio` | `float` | Dynamixel-specific in the current codebase. Gear reduction ratio, for example `1.0` for no reduction or `2.0` for 2:1 reduction. |
+| `direction` | `int` | Usually `+1` or `-1`. Multiplier for inverting direction if the motor moves opposite to the expected direction. |
+| `zero_offset_ticks` | `int` | Zero position offset in ticks. For example, if the motor's zero position is at 512 ticks, set this to 512 so `open_position: 0.0` corresponds to the physical open position. |
 
 ## Servo targets
 
-- `open_position` (float): target open position (radians by default)
-- `close_position` (float): target close position (radians by default)
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `open_position` | `float` | Target open position, in radians by default. |
+| `close_position` | `float` | Target close position, in radians by default. |
 
 ## Servo motion completion behavior
 
-- `goal_tolerance_ticks` (int): success when `abs(target - present) <= tolerance`
-- `motion_timeout_sec` (float): abort if not reached in time
-- `poll_rate_hz` (float): present position polling frequency
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `goal_tolerance_ticks` | `int` | Treat the command as successful when `abs(target - present) <= tolerance`. |
+| `motion_timeout_sec` | `float` | Abort if the target is not reached in time. |
+| `poll_rate_hz` | `float` | Present-position polling frequency. |
+| `status_publish_rate_hz` | `float` | Periodic status logging rate. If `0.0`, disable the background status timer. |
 
 ## Servo Torque mode
 
 ### Common torque-mode parameters
 
-- `use_torque_mode` (bool): default torque-mode behavior if the action goal does not explicitly enable it
-- `control_torque` (float): default torque request used in torque mode when the action goal leaves `torque` at `0.0`
-- `safety_torque_limit` (float): position-mode safety threshold; when reached, the node holds the current position instead of reopening
-- `close_default` (bool): used when close goal’s boolean flag is default-constructed / false
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `use_torque_mode` | `bool` | Default torque-mode behavior if the action goal does not explicitly enable it. |
+| `control_torque` | `float` | Default torque request used in torque mode when the action goal leaves `torque` at `0.0`. |
+| `safety_torque_limit` | `float` | Position-mode safety threshold; when reached, the node holds the current position instead of reopening. |
+| `close_default` | `bool` | Used when the close goal’s `close_ratio` is left at `0.0`; if `true`, the node moves to its configured default close position. |
 
 ### Dynamixel-specific
 
-- `torque_per_current_unit` (float): conversion from Dynamixel present-current units to your chosen torque units; set this if you want action goals and monitoring in Nm
-- `default_torque` (float): used when goal `torque` is `0.0`
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `torque_per_current_unit` | `float` | Conversion from Dynamixel present-current units to your chosen torque units. Set this if you want action goals and monitoring in Nm. |
+| `default_torque` | `float` | Used when goal `torque` is `0.0`. |
 
 ### Feetech-specific
 
-- `speed` (int): motion speed parameter used by the Feetech node (e.g. `4095`)
-- `torque_per_current_unit` (float): conversion from Feetech present-current values to your chosen torque units; the vendored driver currently returns current in amps
-- `torque_limit_per_torque_unit` (float): conversion from your chosen torque units into the Feetech torque-limit register units
-- `default_torque_limit` (float): legacy/raw Feetech torque-limit register fallback used when no calibrated torque request is available
-- `torque_limit_register` (int): register address used for the Feetech torque limit
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `speed` | `int` | Motion speed parameter used by the Feetech node, for example `4095`. |
+| `torque_per_current_unit` | `float` | Conversion from Feetech present-current values to your chosen torque units. The vendored driver currently returns current in amps. |
+| `torque_limit_per_torque_unit` | `float` | Conversion from your chosen torque units into the Feetech torque-limit register units. |
+| `default_torque_limit` | `float` | Legacy or raw Feetech torque-limit register fallback used when no calibrated torque request is available. |
+| `torque_limit_register` | `int` | Register address used for the Feetech torque limit. |
 
 ## Servo Communication retry behavior
 
 The low-level Dynamixel driver now retries transient communication failures internally before surfacing an action failure. This is intended to hide brief `There is no status packet!`, CRC, or parse glitches from the external action client when the bus recovers quickly.
 
-- `comm_retry_timeout_sec` (float): maximum retry window for one low-level operation
-- `comm_retry_initial_delay_sec` (float): first retry delay
-- `comm_retry_max_delay_sec` (float): maximum backoff delay between retries
-- `comm_retry_backoff` (float): retry backoff multiplier
-- `comm_retry_reinit_every` (int): re-open the serial port after this many failed attempts
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `comm_retry_timeout_sec` | `float` | Maximum retry window for one low-level operation. |
+| `comm_retry_initial_delay_sec` | `float` | First retry delay. |
+| `comm_retry_max_delay_sec` | `float` | Maximum backoff delay between retries. |
+| `comm_retry_backoff` | `float` | Retry backoff multiplier. |
+| `comm_retry_reinit_every` | `int` | Re-open the serial port after this many failed attempts. |
 
 Persistent failures still abort the action once the retry window is exhausted.
 
@@ -70,18 +95,22 @@ Persistent failures still abort the action once the retry window is exhausted.
 
 These *must* match your motor model’s control table register addresses for the node to work correctly. The current Dynamixel YAML presets are configured for Protocol 2.0 motors like the XM430, but you can adjust these to support other models or protocols.
 
-- `addr_operating_mode` (int): e.g. `11` for Dynamixel Protocol 2.0
-- `addr_torque_enable` (int) - e.g. `64` for Dynamixel Protocol 2.0
-- `addr_goal_current` (int) - e.g. `102` for Dynamixel Protocol 2.0
-- `addr_goal_position` (int) - e.g. `116` for Dynamixel Protocol 2.0
-- `addr_present_current` (int) - e.g. `126` for Dynamixel Protocol 2.0
-- `addr_present_position` (int) - e.g. `132` for Dynamixel Protocol 2.0
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `addr_operating_mode` | `int` | For example `11` for Dynamixel Protocol 2.0. |
+| `addr_torque_enable` | `int` | For example `64` for Dynamixel Protocol 2.0. |
+| `addr_goal_current` | `int` | For example `102` for Dynamixel Protocol 2.0. |
+| `addr_goal_position` | `int` | For example `116` for Dynamixel Protocol 2.0. |
+| `addr_present_current` | `int` | For example `126` for Dynamixel Protocol 2.0. |
+| `addr_present_position` | `int` | For example `132` for Dynamixel Protocol 2.0. |
 
 ## Servo Operating mode values (Dynamixel-specific)
 
-- `operating_mode_current` (commonly `0`)
-- `operating_mode_position` (commonly `3`)
-- `operating_mode_current_based_position` (commonly `5`)
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `operating_mode_current` | `int` | Commonly `0`. |
+| `operating_mode_position` | `int` | Commonly `3`. |
+| `operating_mode_current_based_position` | `int` | Commonly `5`. |
 
 
 # Torque behavior

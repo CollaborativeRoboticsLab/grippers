@@ -174,8 +174,22 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         )
 
     def _log_gripper_action_result(self, action_name: str, result_message: str, *, success: bool) -> None:
-        log = self.get_logger().info if success else self.get_logger().warning
-        log(f'{action_name} result: {result_message}')
+        if success:
+            self.get_logger().info(f'{action_name} result: {result_message}')
+        else:
+            self.get_logger().warning(f'{action_name} result: {result_message}')
+
+    def _resolve_close_ratio(self, requested_ratio: float) -> float | None:
+        if requested_ratio > 0.0:
+            return max(0.0, min(1.0, requested_ratio))
+        if bool(self._servo_config.close_default):
+            return 1.0
+        return None
+
+    def _interpolate_close_target(self, close_ratio: float) -> float:
+        open_position = float(self._servo_config.open_position)
+        close_position = float(self._servo_config.close_position)
+        return open_position + ((close_position - open_position) * close_ratio)
 
     def _execute_open(self, goal_handle) -> OpenGripper.Result:
         goal = goal_handle.request
@@ -202,13 +216,16 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
     def _execute_close(self, goal_handle) -> CloseGripper.Result:
         goal = goal_handle.request
-        close_requested = bool(goal.close) or bool(self._servo_config.close_default)
+        close_ratio = self._resolve_close_ratio(float(goal.close_ratio))
         torque = self._resolve_torque(float(goal.torque))
         use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
         self._log_gripper_action_request('close_gripper', torque=torque, use_torque_mode=use_torque_mode)
-        if not close_requested:
+        if close_ratio is None:
             goal_handle.succeed()
-            result = CloseGripper.Result(success=True, message='Close goal flag was false; no action taken.')
+            result = CloseGripper.Result(
+                success=True,
+                message='Close ratio was non-positive and close_default is false; no action taken.',
+            )
             self._log_gripper_action_result('close_gripper', result.message, success=True)
             return result
 
@@ -216,15 +233,17 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             goal_handle,
             CloseGripper.Feedback,
             CloseGripper.Result,
-            target_position=float(self._servo_config.close_position),
+            target_position=self._interpolate_close_target(close_ratio),
             torque=torque,
             use_torque_mode=use_torque_mode,
-            already_message='Servo already at close position.',
-            success_message='Close command sent.',
-            torque_reached_message='Close reached the requested torque and is holding position.',
-            safety_limit_message='Close stopped at the safety torque limit and is holding position.',
-            timeout_message='Close timed out or was canceled.',
-            canceled_message='Close was canceled.',
+            already_message=f'Servo already at close ratio {close_ratio:.3f}.',
+            success_message=f'Close command sent for ratio {close_ratio:.3f}.',
+            torque_reached_message=f'Close ratio {close_ratio:.3f} reached the requested torque and is holding position.',
+            safety_limit_message=(
+                f'Close ratio {close_ratio:.3f} stopped at the safety torque limit and is holding position.'
+            ),
+            timeout_message=f'Close ratio {close_ratio:.3f} timed out or was canceled.',
+            canceled_message=f'Close ratio {close_ratio:.3f} was canceled.',
             failure_prefix='Close failed',
         )
         self._log_gripper_action_result('close_gripper', result.message, success=bool(result.success))
