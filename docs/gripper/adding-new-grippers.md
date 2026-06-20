@@ -206,6 +206,10 @@ For a new gripper, the typical checklist is:
 7. Include the gripper macro in the robot description.
 8. Validate TF connectivity and motion.
 
+## Adding A New Gripper To The Manipulator
+
+If you want to add this gripper to a manipulator, you can follow the instructions in the [Adding New Manipulator Components](https://github.com/CollaborativeRoboticsLab/grasping/blob/main/docs/manipulator/adding_new_components.md) document.
+
 ## Related Docs
 
 - `docs/servo/parameters.md`
