@@ -1,2 +1,8 @@
-gripper_servo_dynamixel/gripper_servo_dynamixel/__pycache__/
-gripper_ros/launch/__pycache__/
+__pycache__/**
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.dylib
+*.dll
+*.log
