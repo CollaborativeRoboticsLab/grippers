@@ -9,14 +9,13 @@ The intended ownership is:
 
 ## Action types
 
-### `gripper_msgs/action/ServoControl`
+### `control_msgs/action/GripperCommand`
 
 Goal:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `position` | `float` | Target servo position in the configured command units. |
-| `torque` | `float` | Optional torque request; interpretation depends on the active driver. |
+| `command` | `control_msgs/msg/GripperCommand` | Low-level servo command payload. `command.position` is mapped to the configured servo command units, and `command.max_effort` is mapped to the configured torque/current limit units. |
 
 Result:
 
@@ -44,29 +43,30 @@ Inspect the interface:
 
 ```bash
 source install/setup.bash
-ros2 interface show gripper_msgs/action/ServoControl
+ros2 interface show control_msgs/action/GripperCommand
 ```
 
 Send a direct servo command:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 0.0}"
+ros2 action send_goal /servo_control control_msgs/action/GripperCommand "{command: {position: 900.0, max_effort: 0.0}}"
 ```
 
 Servo command with torque/current limiting (if supported by the active driver):
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 0.5}"
+ros2 action send_goal /servo_control control_msgs/action/GripperCommand "{command: {position: 900.0, max_effort: 0.5}}"
 ```
 
-## Notes on `torque`
+## Notes on `command.max_effort`
 
-The action goal field is named `torque`, but its meaning is intentionally **driver-specific**:
+The low-level action uses `control_msgs/action/GripperCommand` for consistency with the gripper-level API, but `/servo_control` is still a direct servo debugging/control API:
 
-- For `ServoControl`, a nonzero `torque` value typically implies a torque-limited or current-limited position command.
-- A Dynamixel-based driver interprets it in the configured torque units and converts it to Goal Current internally using `torque_per_current_unit`. If that parameter is calibrated in Nm, then the action `torque` value is effectively in Nm as well.
-- A Feetech STS/SCS-based driver can also map the action `torque` value into configured torque units when `torque_limit_per_torque_unit` and `torque_per_current_unit` are calibrated, but it remains an approximation built on a torque-limit register rather than true current-based position control.
+- `command.position` is interpreted in the node's configured servo command units, not gripper jaw width in meters.
+- A nonzero `command.max_effort` value typically implies a torque-limited or current-limited position command.
+- A Dynamixel-based driver interprets `command.max_effort` in the configured torque units and converts it to Goal Current internally using `torque_per_current_unit`. If that parameter is calibrated in Nm, then the value is effectively in Nm as well.
+- A Feetech STS/SCS-based driver can also map `command.max_effort` into configured torque units when `torque_limit_per_torque_unit` and `torque_per_current_unit` are calibrated, but it remains an approximation built on a torque-limit register rather than true current-based position control.
 
 See the driver-specific docs for how that value is used.

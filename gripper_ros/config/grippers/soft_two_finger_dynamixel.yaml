@@ -9,6 +9,8 @@ gripper_two_fingers_node:
     gripper_joint_state_topic: joint_states
     gripper_joint_name_prefix: ''
     gripper_joint_state_rate_hz: 10.0
+    gripper_open_width: 0.09
+    gripper_closed_width: 0.0
 
     # Preferred gripper-level articulation model:
     # - One slider joint per finger side.

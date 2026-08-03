@@ -1,10 +1,7 @@
-# Grippers
-
-ROS 2 gripper drivers that expose a **common action-based API** for low-level servo control and gripper-level open/close control.
+* for low-level servo control and gripper-level open/close control.
 
 ## Packages
 
-- `gripper_msgs`: ROS 2 action definitions (`ServoControl`, `OpenGripper`, `CloseGripper`).
 - `gripper_servo_dynamixel`: low-level DynamixelSDK (Protocol 2.0) servo/action package (Python).
 - `gripper_servo_feetech`: low-level Feetech STS/SCS servo/action package (C++).
 - `gripper_two_fingers`: gripper-level two-finger Dynamixel wrapper (Python).
@@ -16,7 +13,7 @@ ROS 2 gripper drivers that expose a **common action-based API** for low-level se
 This ros packages use two action layers:
 
 - low-level servo control: `/servo_control`
-- gripper-level control: `/open_gripper` and `/close_gripper`
+- gripper-level control: `/gripper_command` using `control_msgs/action/GripperCommand`
 
 See [docs/servo/ros2-interface.md](docs/servo/ros2-interface.md) for low-level servo ros2 specifications and examples.
 See [docs/gripper/ros2-interface.md](docs/gripper/ros2-interface.md) for gripper level ros2 specifications and examples.
@@ -51,23 +48,23 @@ Run it alongside `gripper_soft_two_fingers.launch.py` when you want RViz to refl
 
 ### Gripper control
 
-Use the action CLI to send open/close goals (see [docs/gripper/ros2-interface.md](docs/gripper/ros2-interface.md) for details):
+Use the action CLI to send gripper goals (see [docs/gripper/ros2-interface.md](docs/gripper/ros2-interface.md) for details):
 	
 To open gripper:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.09, max_effort: 0.0}}"
 ```
 
 To close gripper:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 0.0}}"
 ```
 
-Read the [gripper action interface docs](docs/gripper/ros2-interface.md) for more details on open/close goal fields and CLI usage.
+Read the [gripper action interface docs](docs/gripper/ros2-interface.md) for more details on `GripperCommand` goal fields and CLI usage.
 Read the [servo action interface docs](docs/servo/ros2-interface.md) for direct low-level servo commands.
 
 

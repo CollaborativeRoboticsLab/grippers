@@ -6,11 +6,11 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(control_msgs REQUIRED)
 find_package(gripper_servo_feetech REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(gripper_msgs REQUIRED)
 
 add_executable(gripper_feetech_test_node src/node.cpp)
 
@@ -21,10 +21,10 @@ target_include_directories(gripper_feetech_test_node PUBLIC
 
 ament_target_dependencies(gripper_feetech_test_node
   gripper_servo_feetech
+  control_msgs
   rclcpp
   rclcpp_action
   sensor_msgs
-  gripper_msgs
 )
 
 install(TARGETS gripper_feetech_test_node

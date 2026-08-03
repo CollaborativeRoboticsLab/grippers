@@ -2,9 +2,9 @@
 
 This package provides a ROS 2 **action server** node for direct single-servo control of a Two finger gripper using **DynamixelSDK Protocol 2.0**.
 
-This node follows the guidelines of [Gripper-level ROS2 interface](ros2-interface.md) and exposes, 
-- `/open_gripper` 
-- `/close_gripper`
+This node follows the guidelines of [Gripper-level ROS2 interface](../docs/gripper/ros2-interface.md) and exposes:
+
+- `/gripper_command` using `control_msgs/action/GripperCommand`
 - articulation publication for `robot_state_publisher` by publishing the mechanism `joint_states` needed to keep the TF tree connected.
 
 This builds on top of [Gripper Servo Dynamixel](../gripper_servo_dynamixel/README.md)
@@ -12,7 +12,7 @@ This builds on top of [Gripper Servo Dynamixel](../gripper_servo_dynamixel/READM
 ## What This Package Does
 
 - Wraps the low-level Dynamixel driver from `gripper_servo_dynamixel`
-- Exposes gripper-level open/close actions
+- Exposes the standard gripper-level command action
 - Maps servo feedback into the two slider joints used by the current URDF model
 - Keeps the simulated and physical gripper articulation aligned through the gripper config
 
@@ -53,22 +53,24 @@ The sim launch depends on the live `/joint_states` published by `gripper_two_fin
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /open_gripper gripper_msgs/action/OpenGripper "{torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.09, max_effort: 0.0}}"
 ```
 
 ### Close the gripper:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 0.0, use_torque_mode: false}"
+ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 0.0}}"
 ```
 
-Close the gripper in torque mode using the goal torque value instead of the configured `control_torque`:
+Close the gripper with an effort limit:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /close_gripper gripper_msgs/action/CloseGripper "{close_ratio: 1.0, torque: 5.0, use_torque_mode: true}"
+ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 5.0}}"
 ```
+
+`GripperCommand.command.position` is the jaw opening in meters. The current two-finger config maps `0.09` m to the configured servo open position and `0.0` m to the configured servo close position.
 
 ## Gripper-level two-finger mapping
 

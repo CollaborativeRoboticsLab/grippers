@@ -18,14 +18,14 @@ Direct servo command:
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 0.0}"
+ros2 action send_goal /servo_control control_msgs/action/GripperCommand "{command: {position: 900.0, max_effort: 0.0}}"
 ```
 
 Servo command with torque/current limiting (if supported by the active driver):
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /servo_control gripper_msgs/action/ServoControl "{position: 900.0, torque: 80.0}"
+ros2 action send_goal /servo_control control_msgs/action/GripperCommand "{command: {position: 900.0, max_effort: 80.0}}"
 ```
 
 For more information read [Servo-level ROS2 interface](../docs/servo/ros2-interface.md) docs.
@@ -36,11 +36,11 @@ For more information read [Servo-level ROS2 interface](../docs/servo/ros2-interf
 The node supports two command styles:
 
 - **Position mode**: writes `Goal Position`.
-- **Torque mode** (implemented as current/torque control): converts the requested torque to `Goal Current` using `torque_per_current_unit`, then writes `Goal Current`.
+- **Torque mode** (implemented as current/torque control): converts the requested `command.max_effort` to `Goal Current` using `torque_per_current_unit`, then writes `Goal Current`.
 
 When torque mode is enabled **and** a target position is also provided (open/close), the node uses **Current-based Position Control** (operating mode `5` by default on many X-series), i.e. it writes both goal current and goal position.
 
-Important: the action goal field is still named `torque`, but in the Dynamixel node it is interpreted in your configured torque units. When `torque_per_current_unit` is calibrated, the node converts between those torque units and Dynamixel current counts internally.
+Important: `/servo_control` embeds `control_msgs/msg/GripperCommand`, but it is still a low-level servo API. `command.position` is interpreted in configured servo command units, and `command.max_effort` is interpreted in configured torque units. When `torque_per_current_unit` is calibrated, the node converts between those torque units and Dynamixel current counts internally.
 
 Read the value calculation at [Notes on `Torque Behavior`](../docs/servo/parameters.md#Torque-behavior) in the servo-level parameter docs for details on how to configure a calibrated torque interpretation.
 

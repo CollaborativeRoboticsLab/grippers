@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer='ubuntu',
     maintainer_email='kalanaratnayake95@gmail.com',
-    description='Two-finger Dynamixel gripper wrapper with open/close actions and slider joint-state publication.',
+    description='Two-finger Dynamixel gripper wrapper with GripperCommand action and slider joint-state publication.',
     license='TODO: License declaration',
     extras_require={
         'test': [

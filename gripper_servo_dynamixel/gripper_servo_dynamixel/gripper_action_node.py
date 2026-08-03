@@ -13,10 +13,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 import rclpy
+from control_msgs.action import GripperCommand
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.node import Node
 
-from gripper_msgs.action import ServoControl
 from gripper_servo_dynamixel.servo import DynamixelServo, DynamixelServoConfig
 
 
@@ -49,7 +49,7 @@ class DynamixelServoActionNode(Node):
         if enable_ros_interface:
             self._servo_control_server = ActionServer(
                 self,
-                ServoControl,
+                GripperCommand,
                 'servo_control',
                 execute_callback=self._execute_servo_control,
                 goal_callback=self._goal_cb,
@@ -270,15 +270,56 @@ class DynamixelServoActionNode(Node):
             goal_handle.abort()
             return result_cls(success=False, message=f'{failure_prefix}: {exc}')
 
-    def _execute_servo_control(self, goal_handle) -> ServoControl.Result:
+    def _current_servo_command_position(self, fallback_position: float) -> float:
+        if self._servo is None:
+            return float(fallback_position)
+
+        try:
+            current_ticks = self._read_present_position()
+            return float(self._servo.ticks_to_command_units(current_ticks))
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warning(
+                f'Failed to read servo position for action result: {type(exc).__name__}: {exc}'
+            )
+            return float(fallback_position)
+
+    def _make_servo_control_feedback(self, target_position: float, effort: float):
+        def make_feedback(progress: float = 0.0) -> GripperCommand.Feedback:
+            feedback = GripperCommand.Feedback()
+            feedback.position = self._current_servo_command_position(float(target_position))
+            feedback.effort = float(effort)
+            feedback.stalled = False
+            feedback.reached_goal = float(progress) >= 1.0
+            return feedback
+
+        return make_feedback
+
+    def _make_servo_control_result(self, target_position: float, effort: float):
+        def make_result(success: bool, message: str) -> GripperCommand.Result:
+            stalled = 'effort' in message.lower() or 'torque' in message.lower() or 'safety' in message.lower()
+            result = GripperCommand.Result()
+            result.position = self._current_servo_command_position(float(target_position))
+            result.effort = float(effort)
+            result.stalled = bool(success and stalled)
+            result.reached_goal = bool(success and not stalled)
+            if success:
+                self.get_logger().info(f'servo_control result: {message}')
+            else:
+                self.get_logger().warning(f'servo_control result: {message}')
+            return result
+
+        return make_result
+
+    def _execute_servo_control(self, goal_handle) -> GripperCommand.Result:
         goal = goal_handle.request
-        position = float(goal.position)
-        torque = self._resolve_torque(float(goal.torque))
-        use_torque_mode = self._resolve_servo_control_use_torque_mode(float(goal.torque))
+        position = float(goal.command.position)
+        requested_effort = float(goal.command.max_effort)
+        torque = self._resolve_torque(requested_effort)
+        use_torque_mode = self._resolve_servo_control_use_torque_mode(requested_effort)
         return self._execute_position_goal(
             goal_handle,
-            ServoControl.Feedback,
-            ServoControl.Result,
+            self._make_servo_control_feedback(position, torque),
+            self._make_servo_control_result(position, torque),
             target_position=position,
             torque=torque,
             use_torque_mode=use_torque_mode,

@@ -75,7 +75,7 @@ Important: the top-level YAML key must match the launched ROS node name. For exa
 Current action ownership pattern:
 
 1. low-level servo packages expose `/servo_control`
-2. gripper-level wrapper packages expose `/open_gripper` and `/close_gripper`
+2. gripper-level wrapper packages expose `/gripper_command` using `control_msgs/action/GripperCommand`
 3. gripper overlays should describe gripper semantics and articulation, not standalone low-level servo debugging APIs
 
 For a Dynamixel gripper overlay, the file should usually:

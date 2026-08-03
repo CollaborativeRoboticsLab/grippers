@@ -2,8 +2,8 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+from control_msgs.action import GripperCommand
 import rclpy
-from gripper_msgs.action import CloseGripper, OpenGripper
 from rclpy.action import ActionServer
 from sensor_msgs.msg import JointState
 
@@ -18,19 +18,11 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             enable_ros_interface=False,
         )
 
-        self._open_server = ActionServer(
+        self._gripper_command_server = ActionServer(
             self,
-            OpenGripper,
-            'open_gripper',
-            execute_callback=self._execute_open,
-            goal_callback=self._goal_cb,
-            cancel_callback=self._cancel_cb,
-        )
-        self._close_server = ActionServer(
-            self,
-            CloseGripper,
-            'close_gripper',
-            execute_callback=self._execute_close,
+            GripperCommand,
+            'gripper_command',
+            execute_callback=self._execute_gripper_command,
             goal_callback=self._goal_cb,
             cancel_callback=self._cancel_cb,
         )
@@ -45,6 +37,9 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self.declare_parameter('gripper_right_finger.joint_open_position', float('nan'))
         self.declare_parameter('gripper_right_finger.joint_close_position', float('nan'))
         self.declare_parameter('gripper_joint_state_rate_hz', 10.0)
+        self.declare_parameter('gripper_open_width', float('nan'))
+        self.declare_parameter('gripper_closed_width', 0.0)
+        self.declare_parameter('gripper_position_tolerance', 0.0005)
 
         self._joint_state_pub = self.create_publisher(
             JointState,
@@ -179,79 +174,122 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         else:
             self.get_logger().warning(f'{action_name} result: {result_message}')
 
-    def _resolve_close_ratio(self, requested_ratio: float) -> float | None:
-        if requested_ratio > 0.0:
-            return max(0.0, min(1.0, requested_ratio))
-        if bool(self._servo_config.close_default):
-            return 1.0
-        return None
+    def _configured_gripper_open_width(self) -> float:
+        configured_width = float(self.get_parameter('gripper_open_width').value)
+        if not math.isnan(configured_width):
+            return configured_width
 
-    def _interpolate_close_target(self, close_ratio: float) -> float:
+        finger_configs = self._finger_configs()
+        if not finger_configs:
+            raise RuntimeError('gripper_open_width must be configured when finger joint mappings are not available.')
+
+        width = 0.0
+        for config in finger_configs:
+            joint_open = float(config['joint_open_position'])
+            joint_close = float(config['joint_close_position'])
+            if math.isnan(joint_open) or math.isnan(joint_close):
+                raise RuntimeError('gripper_open_width could not be derived because finger joint mappings are incomplete.')
+            width += abs(joint_open - joint_close)
+        return width
+
+    def _gripper_width_limits(self) -> tuple[float, float]:
+        open_width = self._configured_gripper_open_width()
+        closed_width = float(self.get_parameter('gripper_closed_width').value)
+        if open_width < closed_width:
+            raise RuntimeError('gripper_open_width must be greater than or equal to gripper_closed_width.')
+        return open_width, closed_width
+
+    def _gripper_width_to_command_position(self, width_m: float) -> float:
+        open_width, closed_width = self._gripper_width_limits()
+        requested_width = max(closed_width, min(open_width, float(width_m)))
+        if math.isclose(open_width, closed_width):
+            close_ratio = 0.0
+        else:
+            close_ratio = (open_width - requested_width) / (open_width - closed_width)
+
         open_position = float(self._servo_config.open_position)
         close_position = float(self._servo_config.close_position)
         return open_position + ((close_position - open_position) * close_ratio)
 
-    def _execute_open(self, goal_handle) -> OpenGripper.Result:
-        goal = goal_handle.request
-        torque = self._resolve_torque(float(goal.torque))
-        use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
-        self._log_gripper_action_request('open_gripper', torque=torque, use_torque_mode=use_torque_mode)
-        result = self._execute_position_goal(
-            goal_handle,
-            OpenGripper.Feedback,
-            OpenGripper.Result,
-            target_position=float(self._servo_config.open_position),
-            torque=torque,
-            use_torque_mode=use_torque_mode,
-            already_message='Servo already at open position.',
-            success_message='Open command sent.',
-            torque_reached_message='Open reached the requested torque and is holding position.',
-            safety_limit_message='Open stopped at the safety torque limit and is holding position.',
-            timeout_message='Open timed out or was canceled.',
-            canceled_message='Open was canceled.',
-            failure_prefix='Open failed',
-        )
-        self._log_gripper_action_result('open_gripper', result.message, success=bool(result.success))
-        return result
+    def _command_position_to_gripper_width(self, command_position: float) -> float:
+        open_width, closed_width = self._gripper_width_limits()
+        open_position = float(self._servo_config.open_position)
+        close_position = float(self._servo_config.close_position)
+        if math.isclose(open_position, close_position):
+            return open_width
 
-    def _execute_close(self, goal_handle) -> CloseGripper.Result:
-        goal = goal_handle.request
-        close_ratio = self._resolve_close_ratio(float(goal.close_ratio))
-        torque = self._resolve_torque(float(goal.torque))
-        use_torque_mode = self._resolve_use_torque_mode(bool(goal.use_torque_mode))
-        self._log_gripper_action_request('close_gripper', torque=torque, use_torque_mode=use_torque_mode)
-        if close_ratio is None:
-            goal_handle.succeed()
-            result = CloseGripper.Result(
-                success=True,
-                message='Close ratio was non-positive and close_default is false; no action taken.',
+        close_ratio = (float(command_position) - open_position) / (close_position - open_position)
+        close_ratio = max(0.0, min(1.0, close_ratio))
+        return open_width + ((closed_width - open_width) * close_ratio)
+
+    def _current_gripper_width(self, fallback_width: float) -> float:
+        if self._servo is None:
+            return float(fallback_width)
+
+        try:
+            current_ticks = self._read_present_position()
+            command_position = float(self._servo.ticks_to_command_units(current_ticks))
+            return self._command_position_to_gripper_width(command_position)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warning(
+                f'Failed to read gripper width for action result: {type(exc).__name__}: {exc}'
             )
-            self._log_gripper_action_result('close_gripper', result.message, success=True)
+            return float(fallback_width)
+
+    def _make_gripper_command_feedback(self, target_width: float, effort: float):
+        def make_feedback(progress: float = 0.0) -> GripperCommand.Feedback:
+            progress = max(0.0, min(1.0, float(progress)))
+            current_width = self._current_gripper_width(float(target_width))
+            tolerance = float(self.get_parameter('gripper_position_tolerance').value)
+            feedback = GripperCommand.Feedback()
+            feedback.position = current_width
+            feedback.effort = float(effort)
+            feedback.stalled = False
+            feedback.reached_goal = progress >= 1.0 and math.isclose(current_width, float(target_width), rel_tol=0.0, abs_tol=tolerance)
+            return feedback
+
+        return make_feedback
+
+    def _make_gripper_command_result(self, target_width: float, effort: float, action_name: str):
+        def make_result(success: bool, message: str) -> GripperCommand.Result:
+            stalled = 'effort' in message.lower() or 'torque' in message.lower() or 'safety' in message.lower()
+            result = GripperCommand.Result()
+            result.position = self._current_gripper_width(float(target_width))
+            result.effort = float(effort)
+            result.stalled = bool(success and stalled)
+            result.reached_goal = bool(success and not stalled)
+            self._log_gripper_action_result(action_name, message, success=bool(success))
             return result
 
-        result = self._execute_position_goal(
+        return make_result
+
+    def _execute_gripper_command(self, goal_handle) -> GripperCommand.Result:
+        goal = goal_handle.request
+        target_width = float(goal.command.position)
+        target_position = self._gripper_width_to_command_position(target_width)
+        requested_effort = float(goal.command.max_effort)
+        torque = self._resolve_torque(requested_effort)
+        use_torque_mode = self._resolve_use_torque_mode(abs(requested_effort) > 0.0)
+        self._log_gripper_action_request('gripper_command', torque=torque, use_torque_mode=use_torque_mode)
+
+        return self._execute_position_goal(
             goal_handle,
-            CloseGripper.Feedback,
-            CloseGripper.Result,
-            target_position=self._interpolate_close_target(close_ratio),
+            self._make_gripper_command_feedback(target_width, torque),
+            self._make_gripper_command_result(target_width, torque, 'gripper_command'),
+            target_position=target_position,
             torque=torque,
             use_torque_mode=use_torque_mode,
-            already_message=f'Servo already at close ratio {close_ratio:.3f}.',
-            success_message=f'Close command sent for ratio {close_ratio:.3f}.',
-            torque_reached_message=f'Close ratio {close_ratio:.3f} reached the requested torque and is holding position.',
-            safety_limit_message=(
-                f'Close ratio {close_ratio:.3f} stopped at the safety torque limit and is holding position.'
-            ),
-            timeout_message=f'Close ratio {close_ratio:.3f} timed out or was canceled.',
-            canceled_message=f'Close ratio {close_ratio:.3f} was canceled.',
-            failure_prefix='Close failed',
+            already_message='Gripper already at requested position.',
+            success_message='Gripper command sent.',
+            torque_reached_message='Gripper reached the requested effort and is holding position.',
+            safety_limit_message='Gripper stopped at the safety effort limit and is holding position.',
+            timeout_message='Gripper command timed out or was canceled.',
+            canceled_message='Gripper command was canceled.',
+            failure_prefix='Gripper command failed',
         )
-        self._log_gripper_action_result('close_gripper', result.message, success=bool(result.success))
-        return result
 
     def destroy_node(self) -> bool:
-        self._open_server.destroy()
-        self._close_server.destroy()
+        self._gripper_command_server.destroy()
         return super().destroy_node()
 
 

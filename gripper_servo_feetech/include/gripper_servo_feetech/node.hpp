@@ -14,7 +14,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
-#include <gripper_msgs/action/servo_control.hpp>
+#include <control_msgs/action/gripper_command.hpp>
 
 // Ensure HardwareSerial is defined for the STS driver.
 #include "gripper_servo_feetech/Feetech-STSServo/linux_serial.hpp"
@@ -98,7 +98,7 @@ public:
 
 
 protected:
-	using ServoControl = gripper_msgs::action::ServoControl;
+	using ServoControl = control_msgs::action::GripperCommand;
 	using GoalHandleServoControl = rclcpp_action::ServerGoalHandle<ServoControl>;
 
 	virtual void handle_position_feedback(int) {}
@@ -306,6 +306,26 @@ protected:
 		return hold_ticks;
 	}
 
+	auto make_servo_control_result(double position, double effort, bool stalled, bool reached_goal) const
+	{
+		auto result = std::make_shared<ServoControl::Result>();
+		result->position = position;
+		result->effort = effort;
+		result->stalled = stalled;
+		result->reached_goal = reached_goal;
+		return result;
+	}
+
+	auto make_servo_control_feedback(double position, double effort, bool stalled, bool reached_goal) const
+	{
+		auto feedback = std::make_shared<ServoControl::Feedback>();
+		feedback->position = position;
+		feedback->effort = effort;
+		feedback->stalled = stalled;
+		feedback->reached_goal = reached_goal;
+		return feedback;
+	}
+
 	template<typename FeedbackT>
 	MotionLoopResult run_motion_loop(
 		const std::function<bool()> & is_canceling,
@@ -336,28 +356,40 @@ protected:
 			const double applied_torque = read_present_torque();
 			const int err = std::abs(target_ticks - pos);
 			if (err <= tolerance) {
-				feedback->progress = 1.0f;
+				feedback->position = ticks_to_command_units(pos);
+				feedback->effort = applied_torque;
+				feedback->stalled = false;
+				feedback->reached_goal = true;
 				publish_feedback(1.0f);
 				return MotionLoopResult{true, "position_reached"};
 			}
 
 			if (use_torque_mode && std::abs(target_torque) > 0.0 && std::abs(applied_torque) >= std::abs(target_torque)) {
 				hold_current_position(pos);
-				feedback->progress = 1.0f;
+				feedback->position = ticks_to_command_units(pos);
+				feedback->effort = applied_torque;
+				feedback->stalled = true;
+				feedback->reached_goal = false;
 				publish_feedback(1.0f);
 				return MotionLoopResult{true, "target_torque_reached"};
 			}
 
 			if (safety_torque_limit > 0.0 && std::abs(applied_torque) >= std::abs(safety_torque_limit)) {
 				hold_current_position(pos);
-				feedback->progress = 1.0f;
+				feedback->position = ticks_to_command_units(pos);
+				feedback->effort = applied_torque;
+				feedback->stalled = true;
+				feedback->reached_goal = false;
 				publish_feedback(1.0f);
 				return MotionLoopResult{true, "safety_torque_limit_reached"};
 			}
 
 			const float progress = static_cast<float>(std::clamp(
 				1.0 - (static_cast<double>(err) / static_cast<double>(start_err)), 0.0, 1.0));
-			feedback->progress = progress;
+			feedback->position = ticks_to_command_units(pos);
+			feedback->effort = applied_torque;
+			feedback->stalled = false;
+			feedback->reached_goal = false;
 			publish_feedback(progress);
 
 			const auto elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -383,8 +415,9 @@ protected:
 		if (poll_rate <= 0.0) {
 			poll_rate = 30.0;
 		}
-		const double torque = resolve_torque(goal->torque);
-		const bool use_torque_mode = resolve_servo_control_use_torque_mode(goal->torque);
+		const double requested_effort = goal->command.max_effort;
+		const double torque = resolve_torque(requested_effort);
+		const bool use_torque_mode = resolve_servo_control_use_torque_mode(requested_effort);
 
 		try {
 			ensure_connected();
@@ -392,13 +425,11 @@ protected:
 				apply_torque_limit(torque_to_limit_raw(torque));
 			}
 
-			const int target_ticks = position_to_ticks(goal->position);
+			const int target_ticks = position_to_ticks(goal->command.position);
 			const int current_pos = read_present_position_ticks();
 			handle_position_feedback(current_pos);
 			if (is_at_target(current_pos, target_ticks, tolerance)) {
-				auto result = std::make_shared<ServoControl::Result>();
-				result->success = true;
-				result->message = "Servo already at requested position.";
+				auto result = make_servo_control_result(ticks_to_command_units(current_pos), torque, false, true);
 				goal_handle->succeed(result);
 				return;
 			}
@@ -408,10 +439,8 @@ protected:
 			auto feedback = std::make_shared<ServoControl::Feedback>();
 			const auto motion_result = run_motion_loop(
 				[goal_handle]() { return goal_handle->is_canceling(); },
-				[goal_handle]() {
-					auto result = std::make_shared<ServoControl::Result>();
-					result->success = false;
-					result->message = "Servo control canceled.";
+				[this, goal_handle, torque]() {
+					auto result = make_servo_control_result(ticks_to_command_units(read_present_position_ticks()), torque, false, false);
 					goal_handle->canceled(result);
 				},
 				[goal_handle, feedback](float) { goal_handle->publish_feedback(feedback); },
@@ -429,27 +458,27 @@ protected:
 				if (motion_result.reason == "canceled") {
 					return;
 				}
-				auto result = std::make_shared<ServoControl::Result>();
-				result->success = false;
-				result->message = "Servo control timed out.";
+				auto result = make_servo_control_result(ticks_to_command_units(read_present_position_ticks()), torque, false, false);
 				goal_handle->abort(result);
 				return;
 			}
 
-			auto result = std::make_shared<ServoControl::Result>();
-			result->success = true;
+			const int final_ticks = read_present_position_ticks();
+			const double final_position = ticks_to_command_units(final_ticks);
+			const double final_torque = read_present_torque();
 			if (motion_result.reason == "target_torque_reached") {
-				result->message = "Servo reached the requested torque and is holding position.";
+				auto result = make_servo_control_result(final_position, final_torque, true, false);
+				goal_handle->succeed(result);
 			} else if (motion_result.reason == "safety_torque_limit_reached") {
-				result->message = "Servo reached the safety torque limit and is holding position.";
+				auto result = make_servo_control_result(final_position, final_torque, true, false);
+				goal_handle->succeed(result);
 			} else {
-				result->message = "Servo command sent.";
+				auto result = make_servo_control_result(final_position, final_torque, false, true);
+				goal_handle->succeed(result);
 			}
-			goal_handle->succeed(result);
 		} catch (const std::exception & e) {
-			auto result = std::make_shared<ServoControl::Result>();
-			result->success = false;
-			result->message = std::string("Servo control failed: ") + e.what();
+			RCLCPP_WARN(this->get_logger(), "Servo control failed: %s", e.what());
+			auto result = make_servo_control_result(goal->command.position, torque, false, false);
 			goal_handle->abort(result);
 		}
 	}
