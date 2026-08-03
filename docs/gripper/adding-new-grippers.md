@@ -13,7 +13,7 @@ The current repository supports this split for Dynamixel grippers and is prepare
 ## Current Layout
 
 - `gripper_description/`: meshes and xacro macros for gripper geometry.
-- `gripper_ros/config/motors/`: motor-model defaults shared by multiple grippers.
+- `gripper_ros/config/servos/`: servo-model defaults shared by multiple grippers.
 - `gripper_ros/config/grippers/`: gripper-specific overlays.
 - `gripper_ros/launch/`: launch files that compose motor config and gripper config.
 
@@ -33,21 +33,21 @@ If the new gripper has new CAD or linkage geometry:
 
 For example, the current two-finger gripper macro is:
 
-- [`gripper_description/xacro/two-finger-gripper.urdf.xacro`](../gripper_description/xacro/two-finger-gripper.urdf.xacro)
+- [`gripper_description/xacro/two-finger-gripper.urdf.xacro`](../../gripper_description/xacro/two-finger-gripper.urdf.xacro)
 
 When this macro is included by a larger robot description, the `prefix` argument should usually be the robot TF prefix.
 
 If you need to simulate the new gripper alone without rest of the robot, add/use a simulation launch file that includes the gripper xacro and starts `robot_state_publisher` with the resulting URDF.
 
-- [`gripper_ros/launch/gripper_sim.launch.py`](../gripper_ros/launch/gripper_sim.launch.py)
-- [`gripper_description/xacro/two-finger-gripper-standalone.urdf.xacro`](../gripper_description/xacro/two-finger-gripper-standalone.urdf.xacro)
+- [`gripper_ros/launch/gripper_sim.launch.py`](../../gripper_ros/launch/gripper_sim.launch.py)
+- [`gripper_description/xacro/two-finger-gripper-standalone.urdf.xacro`](../../gripper_description/xacro/two-finger-gripper-standalone.urdf.xacro)
 
 ## 2. Add Or Reuse A Motor Config
 
 Motor configs live in:
 
-- [`gripper_ros/config/servos/dynamixel.yaml`](../gripper_ros/config/servos/dynamixel.yaml)
-- [`gripper_ros/config/servos/feetech.yaml`](../gripper_ros/config/servos/feetech.yaml)
+- [`gripper_ros/config/servos/dynamixel.yaml`](../../gripper_ros/config/servos/dynamixel.yaml)
+- [`gripper_ros/config/servos/feetech.yaml`](../../gripper_ros/config/servos/feetech.yaml)
 
 Add a new motor preset when you need a new actuator family or a new reusable model-specific control table setup.
 
@@ -66,7 +66,7 @@ Use the motor config as a reusable base, not as the final configuration for one 
 
 Gripper configs live in:
 
-- [`gripper_ros/config/grippers/`](../gripper_ros/config/grippers/)
+- [`gripper_ros/config/grippers/`](../../gripper_ros/config/grippers/)
 
 Each file in this directory describes one complete gripper assembly.
 
@@ -87,7 +87,7 @@ For a Dynamixel gripper overlay, the file should usually:
 
 Example:
 
-- [`gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`](../gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml)
+- [`gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml`](../../gripper_ros/config/grippers/soft_two_finger_dynamixel.yaml)
 
 Important fields in a gripper overlay:
 
@@ -138,11 +138,11 @@ For a gripper-level launch, compose:
 
 The current example is:
 
-- [`gripper_ros/launch/dynamixel.launch.py`](../gripper_ros/launch/dynamixel.launch.py)
+- [`gripper_ros/launch/dynamixel.launch.py`](../../gripper_ros/launch/dynamixel.launch.py)
 
 The current gripper-level Dynamixel wrapper launch is:
 
-- [`gripper_ros/launch/gripper_soft_two_fingers.launch.py`](../gripper_ros/launch/gripper_soft_two_fingers.launch.py)
+- [`gripper_ros/launch/gripper_soft_two_fingers.launch.py`](../../gripper_ros/launch/gripper_soft_two_fingers.launch.py)
 
 That launch file loads both parameter files into the gripper-level node:
 

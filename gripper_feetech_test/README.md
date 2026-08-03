@@ -2,7 +2,7 @@
 
 This package provides a small C++ (rclcpp) test node that simulates a Feetech gripper for integration and testing.
 
-This node follows the guidelines of [Gripper-level ROS2 interface](ros2-interface.md) and exposes:
+This node follows the guidelines of [Gripper-level ROS2 interface](../docs/gripper/ros2-interface.md) and exposes:
 
 - `/gripper_command` using `control_msgs/action/GripperCommand`
 
