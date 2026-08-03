@@ -199,6 +199,17 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             raise RuntimeError('gripper_open_width must be greater than or equal to gripper_closed_width.')
         return open_width, closed_width
 
+    def _gripper_command_position_to_width(self, command_position: float) -> float:
+        if command_position >= 0.0:
+            return command_position
+
+        finger_configs = self._finger_configs()
+        if not finger_configs:
+            return abs(command_position)
+
+        open_width, _ = self._gripper_width_limits()
+        return min(open_width, abs(command_position) * len(finger_configs))
+
     def _gripper_width_to_command_position(self, width_m: float) -> float:
         open_width, closed_width = self._gripper_width_limits()
         requested_width = max(closed_width, min(open_width, float(width_m)))
@@ -265,7 +276,7 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
     def _execute_gripper_command(self, goal_handle) -> GripperCommand.Result:
         goal = goal_handle.request
-        target_width = float(goal.command.position)
+        target_width = self._gripper_command_position_to_width(float(goal.command.position))
         target_position = self._gripper_width_to_command_position(target_width)
         requested_effort = float(goal.command.max_effort)
         torque = self._resolve_torque(requested_effort)
