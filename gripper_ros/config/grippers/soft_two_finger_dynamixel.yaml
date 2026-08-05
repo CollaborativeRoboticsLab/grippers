@@ -34,8 +34,8 @@ gripper_two_fingers_node:
       open_position: 900.0
       close_position: 1950.0
 
-      control_torque: 0.5
-      use_torque_mode: false
+      control_torque: 2.0
+      use_torque_mode: true
       default_torque: 0.0
-      safety_torque_limit: 1.0
+      safety_torque_limit: 2.0
       close_default: true

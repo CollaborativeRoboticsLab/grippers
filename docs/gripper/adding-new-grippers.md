@@ -193,6 +193,10 @@ If the TF tree is connected but the motion is visually wrong, adjust:
 - `gripper_right_finger.joint_open_position`
 - `gripper_right_finger.joint_close_position`
 
+For the current slider-based two-finger model, `gripper_open_width` and `gripper_closed_width` describe total jaw opening, while the left and right finger joint values describe each side's individual slider position.
+
+See [parameters.md](./parameters.md) for the current parameter reference.
+
 ## 7. Checklist
 
 For a new gripper, the typical checklist is:

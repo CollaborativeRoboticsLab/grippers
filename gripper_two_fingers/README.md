@@ -156,9 +156,9 @@ If simulated motion is reversed relative to hardware, adjust only the `joint_ope
 
 Overriding servo parameters from the gripper config:
 
-- `XM430.control_torque`: default torque request used in torque mode when the goal torque is `0.0`
+- `XM430.control_torque`: default torque request used in torque mode when `command.max_effort` is `0.0`
 - `XM430.use_torque_mode`: default torque-mode behavior when the goal does not explicitly enable it
-- `XM430.default_torque`: used when goal `torque` is `0.0`
+- `XM430.default_torque`: used when `command.max_effort` is `0.0` and `control_torque` is also `0.0`
 - `XM430.safety_torque_limit`: stop threshold used while running in position mode
 - `XM430.use_torque_mode`: default action mode when the goal does not explicitly request one
 

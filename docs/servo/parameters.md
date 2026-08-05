@@ -65,7 +65,7 @@ Following are the common parameters for most servo configurations. Check the spe
 | Parameter | Type | Description |
 | --- | --- | --- |
 | `torque_per_current_unit` | `float` | Conversion from Dynamixel present-current units to your chosen torque units. Set this if you want action goals and monitoring in Nm. |
-| `default_torque` | `float` | Used when goal `torque` is `0.0`. |
+| `default_torque` | `float` | Used when `command.max_effort` is `0.0` and `control_torque` is also `0.0`. |
 
 ### Feetech-specific
 
@@ -117,8 +117,8 @@ These *must* match your motor model’s control table register addresses for the
 
 - Position mode keeps moving toward the requested open/close target until it reaches the target or the measured torque exceeds `safety_torque_limit`.
 - When the safety limit is hit, the node writes the current position back as the hold target, so the gripper stops without reopening.
-- Dynamixel torque mode uses `control_torque` unless the action goal supplies a non-zero `torque`, and it stops once the requested torque is reached while keeping the current position.
-- Feetech torque mode is an approximation: it applies a torque-limit register value derived from the requested torque and stops once the measured torque estimate reaches the requested threshold.
+- Dynamixel torque mode uses `control_torque` unless the action goal supplies a non-zero `command.max_effort`, and it stops once the requested effort threshold is reached while keeping the current position.
+- Feetech torque mode is an approximation: it applies a torque-limit register value derived from `command.max_effort` and stops once the measured torque estimate reaches the requested threshold.
 
 ## Calibrating `torque_per_current_unit`
 

@@ -15,8 +15,8 @@ Goal:
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `command.position` | `float64` | Target gripper jaw opening in meters. Use `gripper_open_width` for open and `gripper_closed_width` for closed. |
-| `command.max_effort` | `float64` | Optional effort limit in newtons. A non-zero value enables the backend's force/torque/current limiting path where supported. |
+| `command.position` | `float64` | Target total gripper jaw opening in meters. Use `gripper_open_width` for open and `gripper_closed_width` for closed. The node maps that public width into the configured left and right finger joint positions. |
+| `command.max_effort` | `float64` | Optional effort request. A non-zero value enables the backend's force/torque/current limiting path where supported. A value of `0.0` means "use the configured default torque behavior". |
 
 Result:
 
@@ -80,14 +80,3 @@ source install/setup.bash
 ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 5.0}}"
 ```
 
-## Notes on `max_effort`
-
-The standard action field is specified in newtons. The wrappers convert the requested jaw opening in meters into each servo backend's configured open/close command units. Effort reporting and limiting are only physically meaningful in newtons after the active backend is calibrated:
-
-- Dynamixel: if `torque_per_current_unit` and the gripper geometry are calibrated, then the action goal `max_effort` can be treated as newtons at the fingers.
-- Dynamixel position mode monitors measured torque and stops at `safety_torque_limit` without reopening the gripper.
-- Dynamixel torque mode uses `control_torque` unless the goal sends a non-zero `max_effort`, and it stops once the requested effort is reached while holding position.
-- Feetech: if `torque_limit_per_torque_unit`, `torque_per_current_unit`, and the gripper geometry are calibrated, the action goal `max_effort` can also be treated as newtons at the fingers.
-- Feetech still uses an approximate torque mode implemented through a torque-limit register plus current monitoring, not true current-based position control.
-
-If you want to command physical units such as Nm, calibrate the active driver so one action-unit maps consistently to the driver's measured torque estimate.
