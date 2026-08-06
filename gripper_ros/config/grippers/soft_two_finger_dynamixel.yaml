@@ -25,6 +25,18 @@ gripper_two_fingers_node:
       joint_open_position: -0.045
       joint_close_position: 0.0
 
+    # Default force exerted by the gripper in newtons when torque mode is enabled
+    # and the action goal leaves command.max_effort at 0.0.
+    max_effort: 0.0
+
+    # Converts gripper force in newtons to the low-level servo torque units.
+    # Start with an external calibration and refine it as better sensing becomes available.
+    max_effort_to_torque_factor: 1.0
+
+    # Calibration/debugging escape hatch: when true, gripper-level command.max_effort
+    # bypasses max_effort_to_torque_factor and is treated directly as low-level torque.
+    bypass_max_effort: false
+
     XM430-W350:
       device_name: /dev/ttyUSB0
       baudrate: 57600
@@ -34,8 +46,11 @@ gripper_two_fingers_node:
       open_position: 900.0
       close_position: 1950.0
 
+      min_current_unit: 0
+      max_current_unit: 1193
+
+      # Default low-level torque request for the servo action interface.
       control_torque: 2.0
       use_torque_mode: true
-      default_torque: 0.0
       safety_torque_limit: 2.0
       close_default: true

@@ -71,9 +71,12 @@ public:
 		this->declare_parameter<double>("torque_limit_per_torque_unit", 1.0);
 		this->declare_parameter<double>("control_torque", 0.0);
 		this->declare_parameter<double>("safety_torque_limit", 0.0);
-		this->declare_parameter<double>("default_torque_limit", 0.0);
+		this->declare_parameter<double>("stall_torque", 0.0);
+		this->declare_parameter<double>("stall_current", 0.0);
 		this->declare_parameter<int>("torque_limit_register", static_cast<int>(STSRegisters::TORQUE_LIMIT));
 		this->declare_parameter<bool>("close_default", true);
+
+		validate_torque_config();
 
 		if (enable_ros_interface) {
 			servo_control_server_ = rclcpp_action::create_server<ServoControl>(
@@ -151,28 +154,77 @@ protected:
 		return resolve_use_torque_mode(std::abs(requested_torque) > 0.0);
 	}
 
+	std::optional<double> maximum_allowed_torque() const
+	{
+		std::vector<double> limits;
+		const double safety_torque_limit = this->get_parameter("safety_torque_limit").as_double();
+		const double stall_torque = this->get_parameter("stall_torque").as_double();
+		if (safety_torque_limit > 0.0) {
+			limits.push_back(safety_torque_limit);
+		}
+		if (stall_torque > 0.0) {
+			limits.push_back(stall_torque);
+		}
+		if (limits.empty()) {
+			return std::nullopt;
+		}
+		return *std::min_element(limits.begin(), limits.end());
+	}
+
+	double clamp_torque(double torque, const char * source) const
+	{
+		const auto limit = maximum_allowed_torque();
+		if (!limit.has_value() || std::abs(torque) <= *limit) {
+			return torque;
+		}
+
+		const double clamped_torque = std::copysign(*limit, torque);
+		RCLCPP_WARN(
+			this->get_logger(),
+			"%s=%.3f exceeds configured torque limit %.3f; clamping to %.3f.",
+			source,
+			torque,
+			*limit,
+			clamped_torque);
+		return clamped_torque;
+	}
+
+	void validate_torque_config() const
+	{
+		const double stall_torque = this->get_parameter("stall_torque").as_double();
+		const double safety_torque_limit = this->get_parameter("safety_torque_limit").as_double();
+		if (stall_torque > 0.0 && safety_torque_limit > stall_torque) {
+			throw std::invalid_argument("safety_torque_limit must be less than or equal to stall_torque.");
+		}
+
+		const auto limit = maximum_allowed_torque();
+		const double control_torque = this->get_parameter("control_torque").as_double();
+		if (limit.has_value() && std::abs(control_torque) > *limit) {
+			RCLCPP_WARN(
+				this->get_logger(),
+				"Configured control_torque=%.3f exceeds torque limit %.3f; it will be clamped at runtime.",
+				control_torque,
+				*limit);
+		}
+	}
+
 	bool is_at_target(int current_ticks, int target_ticks, int tolerance_ticks) const
 	{
 		return std::abs(target_ticks - current_ticks) <= tolerance_ticks;
 	}
 
-	double resolve_torque(double requested) const
+	double resolve_torque(double requested, bool use_torque_mode) const
 	{
-		double v = requested;
-		if (std::abs(v) <= 0.0) {
+		if (std::abs(requested) > 0.0) {
+			return clamp_torque(requested, "command.max_effort");
+		}
+		if (use_torque_mode) {
 			const double control_torque = this->get_parameter("control_torque").as_double();
 			if (std::abs(control_torque) > 0.0) {
-				return control_torque;
+				return clamp_torque(control_torque, "control_torque");
 			}
-
-			const double default_torque_limit = this->get_parameter("default_torque_limit").as_double();
-			const double torque_limit_scale = this->get_parameter("torque_limit_per_torque_unit").as_double();
-			if (std::abs(default_torque_limit) > 0.0 && torque_limit_scale > 0.0) {
-				return default_torque_limit / torque_limit_scale;
-			}
-			v = default_torque_limit;
 		}
-		return v;
+		return 0.0;
 	}
 
 	int torque_to_limit_raw(double torque) const
@@ -416,8 +468,9 @@ protected:
 			poll_rate = 30.0;
 		}
 		const double requested_effort = goal->command.max_effort;
-		const double torque = resolve_torque(requested_effort);
-		const bool use_torque_mode = resolve_servo_control_use_torque_mode(requested_effort);
+		const bool requested_torque_mode = resolve_servo_control_use_torque_mode(requested_effort);
+		const double torque = resolve_torque(requested_effort, requested_torque_mode);
+		const bool use_torque_mode = requested_torque_mode && std::abs(torque) > 0.0;
 
 		try {
 			ensure_connected();

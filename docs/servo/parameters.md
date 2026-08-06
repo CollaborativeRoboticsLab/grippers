@@ -56,16 +56,19 @@ Following are the common parameters for most servo configurations. Check the spe
 | Parameter | Type | Description |
 | --- | --- | --- |
 | `use_torque_mode` | `bool` | Default torque-mode behavior if the action goal does not explicitly enable it. |
-| `control_torque` | `float` | Default torque request used in torque mode when the action goal leaves `torque` at `0.0`. |
-| `safety_torque_limit` | `float` | Position-mode safety threshold; when reached, the node holds the current position instead of reopening. |
+| `control_torque` | `float` | Default torque request used in torque mode when the action goal leaves `command.max_effort` at `0.0`. |
+| `safety_torque_limit` | `float` | Software torque threshold. In position mode it stops and holds when measured torque exceeds this threshold. In torque mode it also acts as the maximum allowed requested effort. |
 | `close_default` | `bool` | Used when the close goal’s `close_ratio` is left at `0.0`; if `true`, the node moves to its configured default close position. |
 
 ### Dynamixel-specific
 
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `torque_per_current_unit` | `float` | Conversion from Dynamixel present-current units to your chosen torque units. Set this if you want action goals and monitoring in Nm. |
-| `default_torque` | `float` | Used when `command.max_effort` is `0.0` and `control_torque` is also `0.0`. |
+| `torque_per_current_unit` | `float` | Conversion from one raw Dynamixel current unit into your chosen torque unit. For XM430, one raw current unit is about `2.69 mA`; `torque_per_current_unit` is therefore typically expressed as something like `Nm / raw_current_unit`. |
+| `min_current_unit` | `int` | Minimum raw current magnitude the node will write when a non-zero torque request is issued. Default `0`. |
+| `max_current_unit` | `int` | Maximum raw current magnitude the node will write. For XM430 this should normally match the datasheet `Current Limit(38)` upper bound, `1193`, unless you intentionally want a lower software cap. |
+| `stall_torque` | `float` | Datasheet or empirically derived hard physical ceiling for the actuator. The node requires `safety_torque_limit <= stall_torque` when both are configured. |
+| `stall_current` | `float` | Datasheet stall current used for documentation and torque-scale calibration. The Dynamixel node does not command this value directly. |
 
 ### Feetech-specific
 
@@ -74,7 +77,8 @@ Following are the common parameters for most servo configurations. Check the spe
 | `speed` | `int` | Motion speed parameter used by the Feetech node, for example `4095`. |
 | `torque_per_current_unit` | `float` | Conversion from Feetech present-current values to your chosen torque units. The vendored driver currently returns current in amps. |
 | `torque_limit_per_torque_unit` | `float` | Conversion from your chosen torque units into the Feetech torque-limit register units. |
-| `default_torque_limit` | `float` | Legacy or raw Feetech torque-limit register fallback used when no calibrated torque request is available. |
+| `stall_torque` | `float` | Optional hard physical ceiling for the actuator. If set, the node requires `safety_torque_limit <= stall_torque` and clamps requested torque against the lower of the two limits. |
+| `stall_current` | `float` | Optional stall-current reference for documentation and calibration notes. The current Feetech node does not command this value directly. |
 | `torque_limit_register` | `int` | Register address used for the Feetech torque limit. |
 
 ## Servo Communication retry behavior
@@ -117,12 +121,24 @@ These *must* match your motor model’s control table register addresses for the
 
 - Position mode keeps moving toward the requested open/close target until it reaches the target or the measured torque exceeds `safety_torque_limit`.
 - When the safety limit is hit, the node writes the current position back as the hold target, so the gripper stops without reopening.
-- Dynamixel torque mode uses `control_torque` unless the action goal supplies a non-zero `command.max_effort`, and it stops once the requested effort threshold is reached while keeping the current position.
-- Feetech torque mode is an approximation: it applies a torque-limit register value derived from `command.max_effort` and stops once the measured torque estimate reaches the requested threshold.
+- Dynamixel torque mode uses `control_torque` unless the action goal supplies a non-zero `command.max_effort`, and it clamps that request against the configured `safety_torque_limit` and `stall_torque` before converting it to raw Goal Current.
+- Feetech torque mode is an approximation: it applies a torque-limit register value derived from `command.max_effort` or `control_torque`, clamps that request against `safety_torque_limit` and `stall_torque` when configured, and stops once the measured torque estimate reaches the requested threshold.
 
 ## Calibrating `torque_per_current_unit`
 
-The Dynamixel control table reports `Goal Current(102)` and `Present Current(126)` in raw current units. For XM430 servos, the ROBOTIS e-Manual lists that unit as about `2.69 mA` per count.
+The Dynamixel control table reports `Current Limit(38)`, `Goal Current(102)`, and `Present Current(126)` in raw current units. For XM430 servos, the ROBOTIS e-Manual lists that unit as about `2.69 mA` per count.
+
+That `2.69 mA` value is the electrical current resolution of the Dynamixel registers. It is not the same thing as `torque_per_current_unit`.
+
+- `2.69 mA` answers: how much motor current does one raw current count represent?
+- `torque_per_current_unit` answers: how much torque should one raw current count represent in this software configuration?
+
+For XM430-W350, the e-Manual also lists:
+
+- `Current Limit(38)`: `0 .. 1193`
+- `Goal Current(102)`: `-Current Limit .. Current Limit`, which is `-1193 .. 1193` at the default maximum limit
+
+The Dynamixel node now exposes these raw magnitude bounds as `min_current_unit` and `max_current_unit`. By default it uses `0` and `1193`.
 
 To estimate `torque_per_current_unit` for a specific model, use:
 
@@ -147,6 +163,11 @@ If you are using `XM430-W350`, a reasonable starting YAML value is:
 ```yaml
 torque_per_current_unit: 0.00480
 ```
+
+So yes: you can estimate `torque_per_current_unit` from stall information, but you need both parts:
+
+- the raw current-unit resolution from the control table, such as `2.69 mA = 0.00269 A`
+- the torque constant estimate from the datasheet, such as `stall_torque / stall_current`
 
 For Feetech STS/SCS servos, the vendored driver currently reports present current in amps. To interpret action `torque`, `control_torque`, and `safety_torque_limit` in physical units such as Nm, you need two empirical calibrations:
 

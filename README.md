@@ -64,6 +64,37 @@ source install/setup.bash
 ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 0.0}}"
 ```
 
+For calibration/debugging only, the gripper wrapper also exposes a `bypass_max_effort` parameter. When enabled, gripper-level `max_effort` bypasses `max_effort_to_torque_factor` and is treated directly as low-level torque.
+
+### Gripper calibration
+
+Start the gripper stack with `bypass_max_effort` enabled.
+
+```bash
+source install/setup.bash
+ros2 launch gripper_ros gripper_soft_two_fingers.launch.py bypass_max_effort:=true
+```
+
+Use the helper node to step torque through `/gripper_command`, collect measured force samples, and update the plot after each sample:
+
+```bash
+source install/setup.bash
+ros2 run gripper_ros estimate_mett_node.py --ros-args \
+	-p target_position:=0.0 \
+	-p release_position:=0.09 \
+	-p start_torque:=0.2 \
+	-p torque_increment:=0.2 \
+	-p max_torque:=2.0
+```
+
+The node interaction is intentionally simple:
+
+- press Enter to apply the current torque
+- press Enter again to release it
+- enter the measured force in newtons
+- inspect the matplotlib plot
+- press Enter to continue to the next torque increment
+
 Read the [gripper action interface docs](docs/gripper/ros2-interface.md) for more details on `GripperCommand` goal fields and CLI usage.
 Read the [servo action interface docs](docs/servo/ros2-interface.md) for direct low-level servo commands.
 

@@ -33,8 +33,9 @@ The Feetech node now supports the same high-level torque-monitoring features as 
 
 - Position mode writes the target position and monitors measured current-derived torque.
 - If measured torque exceeds `safety_torque_limit`, the node rewrites the current position as a hold target so the gripper stops without reopening.
-- Torque mode uses `control_torque` unless the action goal supplies a non-zero `command.max_effort`.
-- The requested torque is converted into the Feetech torque-limit register using `torque_limit_per_torque_unit`.
+- Torque mode uses `control_torque` only when torque mode is enabled and the action goal leaves `command.max_effort` at `0.0`.
+- The requested torque is clamped against `safety_torque_limit` and `stall_torque` when those are configured.
+- The requested torque is then converted into the Feetech torque-limit register using `torque_limit_per_torque_unit`.
 - The node then monitors measured torque and stops once the requested torque is reached.
 
 Important: unlike Dynamixel current-based position control, the Feetech path still approximates torque mode through a torque-limit register plus current monitoring. It is not true current-based position control.

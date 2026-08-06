@@ -70,7 +70,9 @@ source install/setup.bash
 ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.0, max_effort: 5.0}}"
 ```
 
-`GripperCommand.command.position` is the jaw opening in meters. The current two-finger config maps `0.09` m to the configured servo open position and `0.0` m to the configured servo close position.
+- `GripperCommand.command.position` is the jaw opening in meters. The current two-finger config maps `0.09` m to the configured servo open position and `0.0` m to the configured servo close position.
+
+- At the gripper wrapper level, `GripperCommand.command.max_effort` is interpreted as force in newtons. The wrapper converts that force into the low-level servo torque units using `max_effort_to_torque_factor`.
 
 ## Gripper-level two-finger mapping
 
@@ -156,11 +158,39 @@ If simulated motion is reversed relative to hardware, adjust only the `joint_ope
 
 Overriding servo parameters from the gripper config:
 
-- `XM430.control_torque`: default torque request used in torque mode when `command.max_effort` is `0.0`
+- `max_effort`: default gripper force in newtons when the gripper action goal leaves `command.max_effort` at `0.0`
+- `max_effort_to_torque_factor`: conversion from gripper force in newtons to low-level servo torque units
+- `bypass_max_effort`: calibration/debug flag that makes gripper-level `command.max_effort` act like direct low-level torque instead of force
+- `XM430.control_torque`: default torque request for the low-level `/servo_control` action when its goal leaves `command.max_effort` at `0.0`
 - `XM430.use_torque_mode`: default torque-mode behavior when the goal does not explicitly enable it
-- `XM430.default_torque`: used when `command.max_effort` is `0.0` and `control_torque` is also `0.0`
-- `XM430.safety_torque_limit`: stop threshold used while running in position mode
+- `XM430.min_current_unit` and `XM430.max_current_unit`: raw Goal Current magnitude bounds, typically `0` and `1193` for XM430
+- `XM430.safety_torque_limit`: software safety threshold used for stop-and-hold behavior and torque-request clamping
+- `XM430.stall_torque`: hard physical ceiling from the datasheet
 - `XM430.use_torque_mode`: default action mode when the goal does not explicitly request one
+
+## Calibration
+
+For torque-to-force calibration through the gripper wrapper, use the helper node in `gripper_ros`:
+
+```bash
+source install/setup.bash
+ros2 run gripper_ros estimate_mett_node.py --ros-args \
+  -p target_position:=0.0 \
+  -p release_position:=0.09 \
+  -p start_torque:=0.2 \
+  -p torque_increment:=0.2 \
+  -p max_torque:=2.0
+```
+
+What it does:
+
+- asks you to press Enter to apply each torque step
+- holds that torque until you press Enter again
+- asks for the measured force in newtons
+- updates and shows the matplotlib plot after each sample
+- repeats until `max_torque` is reached
+
+During this workflow the node temporarily enables `bypass_max_effort` on the gripper node, so `GripperCommand.command.max_effort` is treated as direct low-level torque for calibration only.
 
 ## TF Tree
 

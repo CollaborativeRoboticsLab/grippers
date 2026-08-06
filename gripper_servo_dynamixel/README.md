@@ -25,7 +25,7 @@ Servo command with torque/current limiting (if supported by the active driver):
 
 ```bash
 source install/setup.bash
-ros2 action send_goal /servo_control control_msgs/action/GripperCommand "{command: {position: 900.0, max_effort: 80.0}}"
+ros2 action send_goal /servo_control control_msgs/action/GripperCommand "{command: {position: 900.0, max_effort: 1.0}}"
 ```
 
 For more information read [Servo-level ROS2 interface](../docs/servo/ros2-interface.md) docs.

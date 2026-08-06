@@ -16,7 +16,7 @@ Goal:
 | Field | Type | Description |
 | --- | --- | --- |
 | `command.position` | `float64` | Target total gripper jaw opening in meters. Use `gripper_open_width` for open and `gripper_closed_width` for closed. The node maps that public width into the configured left and right finger joint positions. |
-| `command.max_effort` | `float64` | Optional effort request. A non-zero value enables the backend's force/torque/current limiting path where supported. A value of `0.0` means "use the configured default torque behavior". |
+| `command.max_effort` | `float64` | Optional gripper effort request in newtons. A non-zero value overrides the configured gripper default and is converted into the backend's low-level torque/current units. A value of `0.0` means "do not override the configured gripper default". |
 
 Result:
 
@@ -73,7 +73,7 @@ source install/setup.bash
 ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{command: {position: 0.045, max_effort: 0.0}}"
 ```
 
-Close with torque/current limiting (if supported by the active driver):
+Close with force limiting (if supported by the active driver and calibrated for the active gripper):
 
 ```bash
 source install/setup.bash

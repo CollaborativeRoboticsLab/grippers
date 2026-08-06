@@ -8,7 +8,7 @@ There are three separate pieces to think about:
 2. The motor configuration: transport and motor-model defaults.
 3. The gripper configuration: which motors are used by this gripper and how motor motion maps into gripper joints.
 
-The current repository supports this split for Dynamixel grippers and is prepared to use the same pattern for Feetech grippers later.
+The current repository supports this split for both Dynamixel and Feetech grippers.
 
 ## Current Layout
 

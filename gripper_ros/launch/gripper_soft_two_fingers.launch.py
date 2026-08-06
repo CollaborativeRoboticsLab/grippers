@@ -8,13 +8,18 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description() -> LaunchDescription:
     motor_params_file = LaunchConfiguration('motor_params_file')
     gripper_params_file = LaunchConfiguration('gripper_params_file')
+    bypass_max_effort = LaunchConfiguration('bypass_max_effort')
 
     gripper_node = Node(
         package='gripper_two_fingers',
         executable='gripper_two_fingers_node',
         name='gripper_two_fingers_node',
         output='screen',
-        parameters=[motor_params_file, gripper_params_file],
+        parameters=[
+            motor_params_file,
+            gripper_params_file,
+            {'bypass_max_effort': bypass_max_effort},
+        ],
     )
 
     default_motor_params = PathJoinSubstitution([FindPackageShare('gripper_ros'), 'config', 'servos', 'dynamixel.yaml'])
@@ -33,6 +38,11 @@ def generate_launch_description() -> LaunchDescription:
                 'gripper_params_file',
                 default_value=default_gripper_params,
                 description='Path to the gripper-level Dynamixel parameter YAML.',
+            ),
+            DeclareLaunchArgument(
+                'bypass_max_effort',
+                default_value='false',
+                description='When true, gripper-level command.max_effort bypasses force conversion and is treated as direct torque.',
             ),
             gripper_node,
         ]

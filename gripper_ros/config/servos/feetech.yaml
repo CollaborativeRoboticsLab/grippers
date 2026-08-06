@@ -30,7 +30,8 @@
     torque_limit_per_torque_unit: 50.0
     control_torque: 0.5
     safety_torque_limit: 1.0
-    default_torque_limit: 0.0
+    stall_torque: 0.0
+    stall_current: 0.0
     torque_limit_register: 48  # 0x30 TORQUE_LIMIT
 
     close_default: true

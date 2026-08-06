@@ -40,6 +40,9 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         self.declare_parameter('gripper_open_width', float('nan'))
         self.declare_parameter('gripper_closed_width', 0.0)
         self.declare_parameter('gripper_position_tolerance', 0.0005)
+        self.declare_parameter('max_effort', 0.0)
+        self.declare_parameter('max_effort_to_torque_factor', 1.0)
+        self.declare_parameter('bypass_max_effort', False)
 
         self._joint_state_pub = self.create_publisher(
             JointState,
@@ -163,9 +166,38 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
     def _handle_servo_unavailable_feedback(self) -> None:
         self._publish_gripper_joint_states(command_position_value=0.0)
 
-    def _log_gripper_action_request(self, action_name: str, *, torque: float, use_torque_mode: bool) -> None:
+    def _configured_gripper_max_effort(self) -> float:
+        return float(self.get_parameter('max_effort').value)
+
+    def _bypass_max_effort(self) -> bool:
+        return bool(self.get_parameter('bypass_max_effort').value)
+
+    def _max_effort_to_torque_factor(self) -> float:
+        return float(self.get_parameter('max_effort_to_torque_factor').value)
+
+    def _resolve_gripper_effort(self, requested_effort: float, *, use_torque_mode: bool) -> float:
+        if abs(requested_effort) > 0.0:
+            return float(requested_effort)
+
+        configured_effort = self._configured_gripper_max_effort()
+        if use_torque_mode and abs(configured_effort) > 0.0:
+            return float(configured_effort)
+
+        return 0.0
+
+    def _gripper_effort_to_torque(self, effort: float) -> float:
+        if math.isclose(effort, 0.0):
+            return 0.0
+
+        factor = self._max_effort_to_torque_factor()
+        if math.isclose(factor, 0.0):
+            raise RuntimeError('max_effort_to_torque_factor must be non-zero when gripper max_effort is used.')
+
+        return float(effort) * factor
+
+    def _log_gripper_action_request(self, action_name: str, *, effort: float, torque: float, use_torque_mode: bool) -> None:
         self.get_logger().info(
-            f'{action_name} requested (torque={torque:.3f}, use_torque_mode={use_torque_mode}, safety_torque_limit={self._servo_config.safety_torque_limit:.3f})'
+            f'{action_name} requested (effort_N={effort:.3f}, torque={torque:.3f}, use_torque_mode={use_torque_mode}, safety_torque_limit={self._servo_config.safety_torque_limit:.3f})'
         )
 
     def _log_gripper_action_result(self, action_name: str, result_message: str, *, success: bool) -> None:
@@ -279,14 +311,27 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         target_width = self._gripper_command_position_to_width(float(goal.command.position))
         target_position = self._gripper_width_to_command_position(target_width)
         requested_effort = float(goal.command.max_effort)
-        torque = self._resolve_torque(requested_effort)
-        use_torque_mode = self._resolve_use_torque_mode(abs(requested_effort) > 0.0)
-        self._log_gripper_action_request('gripper_command', torque=torque, use_torque_mode=use_torque_mode)
+        if self._bypass_max_effort():
+            use_torque_mode = self._resolve_use_torque_mode(abs(requested_effort) > 0.0)
+            effort = float(requested_effort)
+            torque = self._resolve_torque(requested_effort, use_torque_mode=use_torque_mode)
+        else:
+            use_torque_mode = self._resolve_use_torque_mode(
+                abs(requested_effort) > 0.0 or abs(self._configured_gripper_max_effort()) > 0.0
+            )
+            effort = self._resolve_gripper_effort(requested_effort, use_torque_mode=use_torque_mode)
+            torque = self._resolve_torque(self._gripper_effort_to_torque(effort), use_torque_mode=use_torque_mode)
+        self._log_gripper_action_request(
+            'gripper_command',
+            effort=effort,
+            torque=torque,
+            use_torque_mode=use_torque_mode,
+        )
 
         return self._execute_position_goal(
             goal_handle,
-            self._make_gripper_command_feedback(target_width, torque),
-            self._make_gripper_command_result(target_width, torque, 'gripper_command'),
+            self._make_gripper_command_feedback(target_width, effort),
+            self._make_gripper_command_result(target_width, effort, 'gripper_command'),
             target_position=target_position,
             torque=torque,
             use_torque_mode=use_torque_mode,

@@ -40,11 +40,24 @@ class DynamixelServoConfig:
     comm_retry_backoff: float = 1.7
     comm_retry_reinit_every: int = 5
     torque_per_current_unit: float = 1.0
+    min_current_unit: int = 0
+    max_current_unit: int = 1193
     control_torque: float = 0.0
-    default_torque: float = 0.0
     safety_torque_limit: float = 0.0
+    stall_torque: float = 0.0
+    stall_current: float = 0.0
     use_torque_mode: bool = False
     close_default: bool = True
+
+    def __post_init__(self) -> None:
+        self.min_current_unit = int(self.min_current_unit)
+        self.max_current_unit = int(self.max_current_unit)
+        if self.min_current_unit < 0:
+            raise ValueError('min_current_unit must be greater than or equal to 0.')
+        if self.max_current_unit < self.min_current_unit:
+            raise ValueError('max_current_unit must be greater than or equal to min_current_unit.')
+        if self.stall_torque > 0.0 and self.safety_torque_limit > self.stall_torque:
+            raise ValueError('safety_torque_limit must be less than or equal to stall_torque.')
 
     @classmethod
     def from_node(cls, node: Node, motor_model: str) -> 'DynamixelServoConfig':
@@ -83,9 +96,12 @@ class DynamixelServoConfig:
             comm_retry_backoff=float(declare('comm_retry_backoff', 1.7)),
             comm_retry_reinit_every=int(declare('comm_retry_reinit_every', 5)),
             torque_per_current_unit=float(declare('torque_per_current_unit', 1.0)),
+            min_current_unit=int(declare('min_current_unit', 0)),
+            max_current_unit=int(declare('max_current_unit', 1193)),
             control_torque=float(declare('control_torque', 0.0)),
-            default_torque=float(declare('default_torque', 0.0)),
             safety_torque_limit=float(declare('safety_torque_limit', 0.0)),
+            stall_torque=float(declare('stall_torque', 0.0)),
+            stall_current=float(declare('stall_current', 0.0)),
             use_torque_mode=bool(declare('use_torque_mode', False)),
             close_default=bool(declare('close_default', True)),
         )
@@ -109,11 +125,23 @@ class DynamixelServoConfig:
     def torque_to_current_raw(self, torque: float) -> int:
         scale = float(self.torque_per_current_unit)
         if math.isclose(scale, 0.0):
-            return int(round(float(torque)))
-        return int(round(float(torque) / scale))
+            raw = int(round(float(torque)))
+        else:
+            raw = int(round(float(torque) / scale))
+        return self.clamp_current_raw(raw)
 
     def current_raw_to_torque(self, current_raw: int) -> float:
         return float(current_raw) * float(self.torque_per_current_unit)
+
+    def clamp_current_raw(self, current_raw: int) -> int:
+        raw = int(current_raw)
+        if raw == 0:
+            return 0
+
+        magnitude = min(self.max_current_unit, abs(raw))
+        if self.min_current_unit > 0:
+            magnitude = max(self.min_current_unit, magnitude)
+        return -magnitude if raw < 0 else magnitude
 
 
 class DynamixelProtocol2Driver:
@@ -284,7 +312,7 @@ class DynamixelProtocol2Driver:
         self._raise_if_error(comm, err, 'write_goal_position')
 
     def write_goal_current(self, current_raw: int) -> None:
-        current_raw = int(max(-32768, min(32767, int(current_raw))))
+        current_raw = int(self.config.clamp_current_raw(current_raw))
         current_u16 = current_raw & 0xFFFF
         _, comm, err = self._with_retry(
             'write_goal_current',

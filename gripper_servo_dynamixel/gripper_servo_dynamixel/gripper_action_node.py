@@ -8,6 +8,7 @@ This node stays intentionally below gripper-level linkage logic. It owns one
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -61,6 +62,7 @@ class DynamixelServoActionNode(Node):
             self.get_logger().info(
                 f"Loaded Dynamixel servo config for model={self.motor_model}, id={self._servo_config.servo_id}, device={self._servo_config.device_name}"
             )
+            self._validate_servo_config()
         except Exception as exc:  # noqa: BLE001
             self.get_logger().error(f'Failed to initialize Dynamixel servo: {exc}')
             if bool(self.get_parameter('shutdown_on_init_failure').value):
@@ -92,18 +94,46 @@ class DynamixelServoActionNode(Node):
     def _cancel_cb(self, _goal_handle) -> CancelResponse:
         return CancelResponse.ACCEPT
 
-    def _resolve_torque(self, requested_torque: float) -> float:
+    def _maximum_allowed_torque(self) -> Optional[float]:
+        limits: list[float] = []
+        if self._servo_config.safety_torque_limit > 0.0:
+            limits.append(float(self._servo_config.safety_torque_limit))
+        if self._servo_config.stall_torque > 0.0:
+            limits.append(float(self._servo_config.stall_torque))
+        if not limits:
+            return None
+        return min(limits)
+
+    def _clamp_torque(self, torque: float, *, source: str) -> float:
+        limit = self._maximum_allowed_torque()
+        if limit is None or abs(torque) <= limit:
+            return float(torque)
+
+        clamped_torque = math.copysign(limit, torque)
+        self.get_logger().warning(
+            f'{source}={torque:.3f} exceeds configured torque limit {limit:.3f}; clamping to {clamped_torque:.3f}.'
+        )
+        return float(clamped_torque)
+
+    def _resolve_torque(self, requested_torque: float, *, use_torque_mode: bool) -> float:
         if abs(requested_torque) > 0.0:
-            return float(requested_torque)
-        if abs(self._servo_config.control_torque) > 0.0:
-            return float(self._servo_config.control_torque)
-        return float(self._servo_config.default_torque)
+            return self._clamp_torque(float(requested_torque), source='command.max_effort')
+        if use_torque_mode and abs(self._servo_config.control_torque) > 0.0:
+            return self._clamp_torque(float(self._servo_config.control_torque), source='control_torque')
+        return 0.0
 
     def _resolve_use_torque_mode(self, goal_flag: bool) -> bool:
         return bool(goal_flag) or bool(self._servo_config.use_torque_mode)
 
     def _resolve_servo_control_use_torque_mode(self, requested_torque: float) -> bool:
         return self._resolve_use_torque_mode(abs(float(requested_torque)) > 0.0)
+
+    def _validate_servo_config(self) -> None:
+        limit = self._maximum_allowed_torque()
+        if limit is not None and self._servo_config.control_torque > limit:
+            self.get_logger().warning(
+                f'Configured control_torque={self._servo_config.control_torque:.3f} exceeds torque limit {limit:.3f}; it will be clamped at runtime.'
+            )
 
     def _is_at_target(self, target_ticks: int) -> bool:
         if self._servo is None:
@@ -143,6 +173,8 @@ class DynamixelServoActionNode(Node):
     def _apply_torque(self, torque: float, target_position: Optional[float]) -> Optional[int]:
         if self._servo is None:
             raise RuntimeError('Servo is not initialized.')
+        if math.isclose(torque, 0.0):
+            raise RuntimeError('Torque mode requires a non-zero command.max_effort or control_torque.')
 
         goal_current = self._servo.torque_to_current_raw(torque)
         self._servo.disable_torque()
@@ -314,8 +346,8 @@ class DynamixelServoActionNode(Node):
         goal = goal_handle.request
         position = float(goal.command.position)
         requested_effort = float(goal.command.max_effort)
-        torque = self._resolve_torque(requested_effort)
         use_torque_mode = self._resolve_servo_control_use_torque_mode(requested_effort)
+        torque = self._resolve_torque(requested_effort, use_torque_mode=use_torque_mode)
         return self._execute_position_goal(
             goal_handle,
             self._make_servo_control_feedback(position, torque),
