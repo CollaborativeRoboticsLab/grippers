@@ -34,6 +34,7 @@ class DynamixelServoConfig:
     zero_offset_ticks: int = 0
     goal_tolerance_ticks: int = 20
     motion_timeout_sec: float = 3.0
+    torque_reached_min_duration_sec: float = 0.5
     poll_rate_hz: float = 30.0
     comm_retry_timeout_sec: float = 2.0
     comm_retry_initial_delay_sec: float = 0.05
@@ -91,6 +92,7 @@ class DynamixelServoConfig:
             zero_offset_ticks=int(declare('zero_offset_ticks', 0)),
             goal_tolerance_ticks=int(declare('goal_tolerance_ticks', 20)),
             motion_timeout_sec=float(declare('motion_timeout_sec', 3.0)),
+            torque_reached_min_duration_sec=float(declare('torque_reached_min_duration_sec', 0.5)),
             poll_rate_hz=float(declare('poll_rate_hz', 30.0)),
             comm_retry_timeout_sec=float(declare('comm_retry_timeout_sec', 2.0)),
             comm_retry_initial_delay_sec=float(declare('comm_retry_initial_delay_sec', 0.05)),

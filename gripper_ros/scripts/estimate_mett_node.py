@@ -84,6 +84,7 @@ class EstimateMettNode(Node):
 			print('- This temporarily enables bypass_max_effort on the gripper wrapper.')
 			print('- Press Enter to start each torque step and press Enter again to release it.')
 			print('- After release, enter the measured gripping force in newtons.')
+			print('- Type r after a release or plot preview to redo the same torque step.')
 
 			samples: list[Sample] = []
 			sample_index = 1
@@ -94,38 +95,43 @@ class EstimateMettNode(Node):
 					break
 
 				self.get_logger().info(f'Applying sample {sample_index}: torque={torque:.4f}')
-				result = self._send_goal(position=target_position, max_effort=torque)
-				if not result.reached_goal and not result.stalled:
-					self.get_logger().warning(
-						f'Sample {sample_index} did not report success cleanly: reached_goal={result.reached_goal}, stalled={result.stalled}'
-					)
+				goal_handle = self._send_goal_handle(position=target_position, max_effort=torque)
 
 				stop_input = input('Press Enter to release this torque, or type q to quit: ').strip().lower()
+				self._cancel_goal(goal_handle)
 				if not math.isnan(release_position):
 					self._send_goal(position=release_position, max_effort=0.0)
 				if stop_input == 'q':
 					break
 
-				measured_text = input(f'Measured force for torque {torque:.4f} in N: ').strip().lower()
+				measured_text = input(f'Measured force for torque {torque:.4f} in N, or type r to redo: ').strip().lower()
 				if measured_text == 'q':
 					break
+				if measured_text == 'r':
+					self.get_logger().info(f'Redoing sample {sample_index}: torque={torque:.4f}')
+					continue
 
 				try:
 					measured_force = float(measured_text)
 				except ValueError as exc:
 					raise RuntimeError(f"Invalid force value '{measured_text}'.") from exc
 
-				samples.append(Sample(index=sample_index, torque=float(torque), force=measured_force))
+				candidate_samples = samples + [Sample(index=sample_index, torque=float(torque), force=measured_force)]
+
+				figure = self._build_plot(candidate_samples)
+				self._display_plot(figure)
+				post_plot_action = self._handle_post_plot_prompt(figure, sample_index)
+				plt.close(figure)
+				if post_plot_action == 'redo':
+					self.get_logger().info(f'Redoing sample {sample_index}: torque={torque:.4f}')
+					continue
+
+				samples = candidate_samples
 				output_paths = self._write_outputs(samples)
 				self.get_logger().info(f'Updated calibration CSV: {output_paths[0]}')
 				self.get_logger().info(f'Updated calibration plot: {output_paths[1]}')
-
-				figure = self._build_plot(samples)
-				self._display_plot(figure)
-				if self._handle_post_plot_prompt(figure, sample_index):
-					plt.close(figure)
+				if post_plot_action == 'quit':
 					break
-				plt.close(figure)
 
 				torque += torque_increment
 				sample_index += 1
@@ -200,6 +206,16 @@ class EstimateMettNode(Node):
 			raise RuntimeError(f"Failed to set remote parameter '{parameter_name}': {reason}")
 
 	def _send_goal(self, *, position: float, max_effort: float) -> GripperCommand.Result:
+		goal_handle = self._send_goal_handle(position=position, max_effort=max_effort)
+
+		result_future = goal_handle.get_result_async()
+		rclpy.spin_until_future_complete(self, result_future)
+		wrapped_result = result_future.result()
+		if wrapped_result is None:
+			raise RuntimeError('Calibration goal did not return a result.')
+		return wrapped_result.result
+
+	def _send_goal_handle(self, *, position: float, max_effort: float):
 		goal = GripperCommand.Goal()
 		goal.command.position = float(position)
 		goal.command.max_effort = float(max_effort)
@@ -209,13 +225,11 @@ class EstimateMettNode(Node):
 		goal_handle = send_future.result()
 		if goal_handle is None or not goal_handle.accepted:
 			raise RuntimeError('Calibration goal was rejected by the action server.')
+		return goal_handle
 
-		result_future = goal_handle.get_result_async()
-		rclpy.spin_until_future_complete(self, result_future)
-		wrapped_result = result_future.result()
-		if wrapped_result is None:
-			raise RuntimeError('Calibration goal did not return a result.')
-		return wrapped_result.result
+	def _cancel_goal(self, goal_handle) -> None:
+		cancel_future = goal_handle.cancel_goal_async()
+		rclpy.spin_until_future_complete(self, cancel_future)
 
 	def _write_outputs(self, samples: list[Sample]) -> tuple[Path, Path]:
 		output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()
@@ -226,9 +240,9 @@ class EstimateMettNode(Node):
 
 		with csv_path.open('w', newline='', encoding='ascii') as handle:
 			writer = csv.writer(handle)
-			writer.writerow(['sample_index', 'force_newtons', 'torque_units'])
+			writer.writerow(['sample_index', 'torque_units', 'force_newtons'])
 			for sample in samples:
-				writer.writerow([sample.index, f'{sample.force:.6f}', f'{sample.torque:.6f}'])
+				writer.writerow([sample.index, f'{sample.torque:.6f}', f'{sample.force:.6f}'])
 
 		figure = self._build_plot(samples)
 		figure.savefig(svg_path, format='svg')
@@ -242,31 +256,31 @@ class EstimateMettNode(Node):
 		affine_fit = self._fit_affine(samples) if samples else None
 		forces = [sample.force for sample in samples]
 		torques = [sample.torque for sample in samples]
-		max_force = max(max(forces), 1.0) * 1.1
-		line_forces = [0.0, max_force]
+		max_torque = max(max(torques), 1.0) * 1.1
+		line_torques = [0.0, max_torque]
 
 		figure, axis = plt.subplots(figsize=(8.0, 5.0))
-		axis.scatter(forces, torques, color='#0f766e', label='Samples')
-		if origin_fit is not None:
+		axis.scatter(torques, forces, color='#0f766e', label='Samples')
+		if origin_fit is not None and not math.isclose(origin_fit.slope, 0.0):
 			axis.plot(
-				line_forces,
-				[origin_fit.slope * force for force in line_forces],
+				line_torques,
+				[torque / origin_fit.slope for torque in line_torques],
 				color='#dc2626',
 				linewidth=2.0,
 				label='Through-origin fit',
 			)
-		if affine_fit is not None:
+		if affine_fit is not None and not math.isclose(affine_fit.slope, 0.0):
 			axis.plot(
-				line_forces,
-				[(affine_fit.slope * force) + affine_fit.intercept for force in line_forces],
+				line_torques,
+				[(torque - affine_fit.intercept) / affine_fit.slope for torque in line_torques],
 				color='#2563eb',
 				linewidth=2.0,
 				linestyle='--',
 				label='Affine fit',
 			)
 		axis.set_title('Effort to torque calibration')
-		axis.set_xlabel('Measured force (N)')
-		axis.set_ylabel('Applied torque units')
+		axis.set_xlabel('Applied torque units')
+		axis.set_ylabel('Measured force (N)')
 		axis.grid(True, alpha=0.3)
 		axis.legend(loc='best')
 		axis.set_xlim(left=0.0)
@@ -282,16 +296,18 @@ class EstimateMettNode(Node):
 		except Exception as exc:  # noqa: BLE001
 			self.get_logger().warning(f'Unable to display plot interactively: {exc}')
 
-	def _handle_post_plot_prompt(self, figure: Figure, sample_index: int) -> bool:
+	def _handle_post_plot_prompt(self, figure: Figure, sample_index: int) -> str:
 		while True:
 			choice = input(
-				'Press Enter to continue, type s to save this plot, or type q to quit: '
+				'Press Enter to accept, type r to redo, s to save this plot, or q to quit: '
 			).strip()
 			choice_lower = choice.lower()
 			if choice_lower == '':
-				return False
+				return 'continue'
+			if choice_lower == 'r':
+				return 'redo'
 			if choice_lower == 'q':
-				return True
+				return 'quit'
 			if choice_lower == 's' or choice_lower.startswith('s '):
 				path_text = choice[1:].strip()
 				default_path = self._default_interactive_plot_path(sample_index)
@@ -300,7 +316,7 @@ class EstimateMettNode(Node):
 				path = default_path if not path_text else Path(path_text).expanduser().resolve()
 				self._save_plot(figure, path)
 				continue
-			print("Unknown option. Use Enter to continue, 's' to save, or 'q' to quit.")
+			print("Unknown option. Use Enter to accept, 'r' to redo, 's' to save, or 'q' to quit.")
 
 	def _default_interactive_plot_path(self, sample_index: int) -> Path:
 		output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()

@@ -31,7 +31,7 @@ gripper_two_fingers_node:
 
     # Converts gripper force in newtons to the low-level servo torque units.
     # Start with an external calibration and refine it as better sensing becomes available.
-    max_effort_to_torque_factor: 1.0
+    max_effort_to_torque_factor: 0.0431
 
     # Calibration/debugging escape hatch: when true, gripper-level command.max_effort
     # bypasses max_effort_to_torque_factor and is treated directly as low-level torque.
@@ -52,5 +52,5 @@ gripper_two_fingers_node:
       # Default low-level torque request for the servo action interface.
       control_torque: 2.0
       use_torque_mode: true
-      safety_torque_limit: 2.0
+      safety_torque_limit: 4.0
       close_default: true

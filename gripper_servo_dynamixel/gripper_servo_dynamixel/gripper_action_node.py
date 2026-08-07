@@ -202,6 +202,7 @@ class DynamixelServoActionNode(Node):
         safety_torque_limit: float,
     ) -> MotionLoopResult:
         timeout = float(self._servo_config.motion_timeout_sec)
+        torque_reached_min_duration_sec = max(0.0, float(self._servo_config.torque_reached_min_duration_sec))
         poll_rate = float(self._servo_config.poll_rate_hz)
         sleep_sec = 1.0 / poll_rate if poll_rate > 0.0 else 1.0
         tolerance = int(self._servo_config.goal_tolerance_ticks)
@@ -230,7 +231,12 @@ class DynamixelServoActionNode(Node):
                     goal_handle.publish_feedback(feedback_cls(progress=1.0))
                     return MotionLoopResult(success=True, reason='position_reached')
 
-                if use_torque_mode and abs(target_torque) > 0.0 and abs(applied_torque) >= abs(target_torque):
+                if (
+                    elapsed >= torque_reached_min_duration_sec
+                    and use_torque_mode
+                    and abs(target_torque) > 0.0
+                    and abs(applied_torque) >= abs(target_torque)
+                ):
                     self._hold_current_position(pos)
                     goal_handle.publish_feedback(feedback_cls(progress=1.0))
                     return MotionLoopResult(success=True, reason='target_torque_reached')
