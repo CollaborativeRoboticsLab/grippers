@@ -80,13 +80,11 @@ Use the helper node to step torque through `/gripper_command`, collect measured 
 ```bash
 source install/setup.bash
 ros2 run gripper_ros estimate_mett_node.py --ros-args \
-  -p target_position:=0.0 \
-  -p release_position:=0.09 \
-  -p start_torque:=0.2 \
-  -p torque_increment:=0.2 \
-  -p max_torque:=3.5 \
-  -p ramp_torque_increment:=0.1 \
-  -p ramp_step_delay_sec:=0.2
+	-p target_position:=0.0 \
+	-p release_position:=0.09 \
+	-p start_torque:=0.2 \
+	-p torque_increment:=0.2 \
+	-p max_torque:=1.0
 ```
 
 The node interaction is intentionally simple:
