@@ -52,7 +52,8 @@ class EstimateMettNode(Node):
 		self.declare_parameter('output_dir', '.')
 		self.declare_parameter('output_basename', 'effort_to_torque_calibration')
 
-		self._client = ActionClient(self, GripperCommand, str(self.get_parameter('action_name').value))
+		self._action_name = str(self.get_parameter('action_name').value)
+		self._client = ActionClient(self, GripperCommand, self._action_name)
 		self._original_bypass: Optional[bool] = None
 
 	def run(self) -> None:
@@ -72,9 +73,9 @@ class EstimateMettNode(Node):
 		self._capture_original_bypass()
 
 		try:
-			self.get_logger().info(f"Waiting for action server '{self._client.action_name}'...")
+			self.get_logger().info(f"Waiting for action server '{self._action_name}'...")
 			if not self._client.wait_for_server(timeout_sec=5.0):
-				raise RuntimeError(f"Action server '{self._client.action_name}' is not available.")
+				raise RuntimeError(f"Action server '{self._action_name}' is not available.")
 
 			self._set_remote_bool_parameter(str(self.get_parameter('bypass_parameter_name').value), True)
 
@@ -121,7 +122,9 @@ class EstimateMettNode(Node):
 
 				figure = self._build_plot(samples)
 				self._display_plot(figure)
-				input('Press Enter to continue to the next torque step: ')
+				if self._handle_post_plot_prompt(figure, sample_index):
+					plt.close(figure)
+					break
 				plt.close(figure)
 
 				torque += torque_increment
@@ -278,6 +281,36 @@ class EstimateMettNode(Node):
 			plt.pause(0.001)
 		except Exception as exc:  # noqa: BLE001
 			self.get_logger().warning(f'Unable to display plot interactively: {exc}')
+
+	def _handle_post_plot_prompt(self, figure: Figure, sample_index: int) -> bool:
+		while True:
+			choice = input(
+				'Press Enter to continue, type s to save this plot, or type q to quit: '
+			).strip()
+			choice_lower = choice.lower()
+			if choice_lower == '':
+				return False
+			if choice_lower == 'q':
+				return True
+			if choice_lower == 's' or choice_lower.startswith('s '):
+				path_text = choice[1:].strip()
+				default_path = self._default_interactive_plot_path(sample_index)
+				if not path_text:
+					path_text = input(f'Plot output path [{default_path}]: ').strip()
+				path = default_path if not path_text else Path(path_text).expanduser().resolve()
+				self._save_plot(figure, path)
+				continue
+			print("Unknown option. Use Enter to continue, 's' to save, or 'q' to quit.")
+
+	def _default_interactive_plot_path(self, sample_index: int) -> Path:
+		output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()
+		base_name = str(self.get_parameter('output_basename').value)
+		return output_dir / f'{base_name}_sample_{sample_index}.svg'
+
+	def _save_plot(self, figure: Figure, path: Path) -> None:
+		path.parent.mkdir(parents=True, exist_ok=True)
+		figure.savefig(path)
+		self.get_logger().info(f'Saved calibration plot to {path}')
 
 	def _print_summary(self, samples: list[Sample]) -> None:
 		origin_fit = self._fit_through_origin(samples) if self._can_fit_through_origin(samples) else None

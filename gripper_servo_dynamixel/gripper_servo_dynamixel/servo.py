@@ -16,6 +16,7 @@ class DynamixelServoConfig:
     baudrate: int = 57600
     servo_id: int = 1
     addr_operating_mode: int = 11
+    addr_current_limit: int = 38
     addr_torque_enable: int = 64
     addr_goal_current: int = 102
     addr_goal_position: int = 116
@@ -72,6 +73,7 @@ class DynamixelServoConfig:
             baudrate=int(declare('baudrate', 57600)),
             servo_id=int(declare('servo_id', 1)),
             addr_operating_mode=int(declare('addr_operating_mode', 11)),
+            addr_current_limit=int(declare('addr_current_limit', 38)),
             addr_torque_enable=int(declare('addr_torque_enable', 64)),
             addr_goal_current=int(declare('addr_goal_current', 102)),
             addr_goal_position=int(declare('addr_goal_position', 116)),
@@ -152,6 +154,7 @@ class DynamixelProtocol2Driver:
         baudrate: int,
         servo_id: int,
         addr_operating_mode: int,
+        addr_current_limit: int,
         addr_torque_enable: int,
         addr_goal_current: int,
         addr_goal_position: int,
@@ -183,6 +186,7 @@ class DynamixelProtocol2Driver:
         self._comm_retry_reinit_every = max(0, int(comm_retry_reinit_every))
 
         self.addr_operating_mode = int(addr_operating_mode)
+        self.addr_current_limit = int(addr_current_limit)
         self.addr_torque_enable = int(addr_torque_enable)
         self.addr_goal_current = int(addr_goal_current)
         self.addr_goal_position = int(addr_goal_position)
@@ -285,6 +289,14 @@ class DynamixelProtocol2Driver:
         )
         self._raise_if_error(comm, err, 'set_operating_mode')
 
+    def read_current_limit(self) -> int:
+        data, comm, err = self._with_retry(
+            'read_current_limit',
+            lambda: self._packet.read2ByteTxRx(self._port, self._servo_id, self.addr_current_limit),
+        )
+        self._raise_if_error(comm, err, 'read_current_limit')
+        return int(data)
+
     def enable_torque(self) -> None:
         _, comm, err = self._with_retry(
             'enable_torque',
@@ -312,7 +324,7 @@ class DynamixelProtocol2Driver:
         self._raise_if_error(comm, err, 'write_goal_position')
 
     def write_goal_current(self, current_raw: int) -> None:
-        current_raw = int(self.config.clamp_current_raw(current_raw))
+        current_raw = int(current_raw)
         current_u16 = current_raw & 0xFFFF
         _, comm, err = self._with_retry(
             'write_goal_current',
@@ -341,13 +353,16 @@ class DynamixelProtocol2Driver:
 
 
 class DynamixelServo:
-    def __init__(self, config: DynamixelServoConfig) -> None:
+    def __init__(self, config: DynamixelServoConfig, warn: Optional[Callable[[str], None]] = None) -> None:
         self.config = config
+        self._warn = warn
+        self._effective_max_current_unit = int(config.max_current_unit)
         self._driver = DynamixelProtocol2Driver(
             device_name=config.device_name,
             baudrate=config.baudrate,
             servo_id=config.servo_id,
             addr_operating_mode=config.addr_operating_mode,
+            addr_current_limit=config.addr_current_limit,
             addr_torque_enable=config.addr_torque_enable,
             addr_goal_current=config.addr_goal_current,
             addr_goal_position=config.addr_goal_position,
@@ -362,6 +377,7 @@ class DynamixelServo:
             comm_retry_backoff=config.comm_retry_backoff,
             comm_retry_reinit_every=config.comm_retry_reinit_every,
         )
+        self._effective_max_current_unit = self._read_effective_max_current_unit()
 
     def close(self) -> None:
         self._driver.close()
@@ -371,6 +387,33 @@ class DynamixelServo:
 
     def disable_torque(self) -> None:
         self._driver.disable_torque()
+
+    def _read_effective_max_current_unit(self) -> int:
+        hardware_limit = int(self._driver.read_current_limit())
+        software_limit = int(self.config.max_current_unit)
+        if hardware_limit <= 0:
+            if self._warn is not None:
+                self._warn(
+                    f'Dynamixel Current Limit register ({self.config.addr_current_limit}) is {hardware_limit}; '
+                    'torque/current commands will be clamped to 0.'
+                )
+            return 0
+        if software_limit != hardware_limit and self._warn is not None:
+            self._warn(
+                f'Dynamixel Current Limit register ({self.config.addr_current_limit})={hardware_limit} differs from '
+                f'configured max_current_unit={software_limit}; using hardware register value.'
+            )
+        return hardware_limit
+
+    def _clamp_current_raw(self, current_raw: int) -> int:
+        raw = int(current_raw)
+        if raw == 0:
+            return 0
+
+        magnitude = min(self._effective_max_current_unit, abs(raw))
+        if self.config.min_current_unit > 0 and self._effective_max_current_unit >= self.config.min_current_unit:
+            magnitude = max(int(self.config.min_current_unit), magnitude)
+        return -magnitude if raw < 0 else magnitude
 
     def set_operating_mode(self, mode: int) -> None:
         self._driver.set_operating_mode(mode)
@@ -397,7 +440,12 @@ class DynamixelServo:
         return self.config.ticks_to_command_units(ticks)
 
     def torque_to_current_raw(self, torque: float) -> int:
-        return self.config.torque_to_current_raw(torque)
+        scale = float(self.config.torque_per_current_unit)
+        if math.isclose(scale, 0.0):
+            raw = int(round(float(torque)))
+        else:
+            raw = int(round(float(torque) / scale))
+        return self._clamp_current_raw(raw)
 
     def current_raw_to_torque(self, current_raw: int) -> float:
         return self.config.current_raw_to_torque(current_raw)

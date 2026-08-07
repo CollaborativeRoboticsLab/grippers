@@ -258,8 +258,8 @@ private:
 		const double target_width = goal->command.position;
 		const double target_position = gripper_width_to_command_position(target_width);
 		const double requested_effort = goal->command.max_effort;
-		const double torque = resolve_torque(requested_effort);
 		const bool use_torque_mode = resolve_use_torque_mode(std::abs(requested_effort) > 0.0);
+		const double torque = resolve_torque(requested_effort, use_torque_mode);
 		log_gripper_action_request("gripper_command", torque, use_torque_mode);
 
 		const int speed = this->get_parameter("speed").as_int();

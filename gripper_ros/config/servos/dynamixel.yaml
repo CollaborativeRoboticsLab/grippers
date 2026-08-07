@@ -45,6 +45,7 @@
       comm_retry_reinit_every: 5
 
       addr_operating_mode: 11
+      addr_current_limit: 38
       addr_torque_enable: 64
       addr_goal_current: 102
       addr_goal_position: 116

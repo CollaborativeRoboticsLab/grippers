@@ -58,7 +58,7 @@ class DynamixelServoActionNode(Node):
             )
 
         try:
-            self._servo = DynamixelServo(self._servo_config)
+            self._servo = DynamixelServo(self._servo_config, warn=self.get_logger().warning)
             self.get_logger().info(
                 f"Loaded Dynamixel servo config for model={self.motor_model}, id={self._servo_config.servo_id}, device={self._servo_config.device_name}"
             )
