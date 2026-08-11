@@ -1,0 +1,8 @@
+gripper_feetech_test_node:
+  ros__parameters:
+    publish_gripper_joint_states: false
+    gripper_joint_state_topic: joint_states
+    gripper_joint_name_prefix: ''
+    gripper_joint_state_rate_hz: 10.0
+    gripper_open_width: 0.09
+    gripper_closed_width: 0.0

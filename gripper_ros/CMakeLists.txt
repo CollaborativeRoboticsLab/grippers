@@ -16,7 +16,8 @@ install(DIRECTORY
 )
 
 install(PROGRAMS
-  scripts/estimate_mett_node.py
+  scripts/gripping_force_estimate.py
+  scripts/retention_force_estimate.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -1,0 +1,9 @@
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/uninstall.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/gripper_ros_uninstall.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/test.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/edit_cache.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/rebuild_cache.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/list_install_components.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/install.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/install/local.dir
+/home/ubuntu/colcon_ws/src/grippers/gripper_ros/build/gripper_ros/CMakeFiles/install/strip.dir
