@@ -27,7 +27,7 @@ ros2 launch gripper_ros gripper_soft_two_fingers.launch.py bypass_max_effort:=tr
 
 ```bash
 source install/setup.bash
-ros2 run gripper_ros gripping_force_estimate.py --ros-args \
+ros2 run gripper_estimator gripping_force_estimate --ros-args \
 	-p target_position:=0.0 \
 	-p release_position:=0.09 \
 	-p start_torque:=0.2 \
@@ -86,7 +86,7 @@ The node parses the first comma-separated field as the force value in newtons.
 
 ```bash
 source install/setup.bash
-ros2 run gripper_ros retention_force_estimate.py --ros-args -p port:=/dev/ttyACM0
+ros2 run gripper_estimator retention_force_estimate --ros-args -p port:=/dev/ttyACM0
 ```
 
 If the Arduino enumerates as a different device, replace `/dev/ttyACM0` with the visible serial path such as `/dev/ttyUSB0`.
@@ -141,7 +141,7 @@ If you only want continuous ROS publishing without the prompt-driven acquisition
 
 ```bash
 source install/setup.bash
-ros2 run gripper_ros retention_force_estimate.py --ros-args \
+ros2 run gripper_estimator retention_force_estimate --ros-args \
 	-p port:=/dev/ttyACM0 \
 	-p interactive_mode:=false \
 	-p record_data:=true
