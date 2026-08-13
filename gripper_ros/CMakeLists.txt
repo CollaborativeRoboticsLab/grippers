@@ -15,10 +15,4 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS
-  scripts/gripping_force_estimate.py
-  scripts/retention_force_estimate.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 ament_package()
