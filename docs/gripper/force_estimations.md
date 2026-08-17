@@ -120,11 +120,11 @@ The node currently defaults to `interactive_mode:=true`, which restores the same
 - `poll_rate_hz`: Poll rate used in non-interactive mode.
 - `test_read_count`: Number of test reads shown before acquisition.
 - `default_object_name`: Default object label for saved files.
-- `default_trial_number`: Default trial identifier for saved files.
+- `default_trial_id`: Default trial identifier for saved files.
 - `default_duration_sec`: Default acquisition duration.
 - `output_dir`: Output directory. By default this is `retention_force_data` under the colcon workspace root.
 - `save_plot`: Save the matplotlib plot after acquisition.
-- `show_plot`: Attempt to display the plot interactively.
+- `show_plot`: Attempt to display the plot interactively. Default: `false`.
 
 ### Output files
 

@@ -93,7 +93,7 @@ class RetentionForceEstimateNode(Node):
 		self.declare_parameter('test_read_delay_sec', 0.2)
 		self.declare_parameter('default_object_name', 'test_object')
 		self.declare_parameter(
-			'default_trial_number',
+			'default_trial_id',
 			'001',
 			ParameterDescriptor(dynamic_typing=True),
 		)
@@ -105,7 +105,7 @@ class RetentionForceEstimateNode(Node):
 		self.declare_parameter('output_dir', str(default_output_dir))
 		self.declare_parameter('output_basename', 'retention_force')
 		self.declare_parameter('save_plot', True)
-		self.declare_parameter('show_plot', True)
+		self.declare_parameter('show_plot', False)
 
 		self._serial: Optional[Serial] = None
 		self._samples: list[ForceSample] = []
@@ -115,6 +115,7 @@ class RetentionForceEstimateNode(Node):
 		self._timer = None
 		self._recording_active = False
 		self._recording_saved = False
+		self._next_trial_id, self._trial_id_width = self._load_trial_id_state()
 
 		self._force_publisher = self.create_publisher(
 			Float64,
@@ -128,6 +129,7 @@ class RetentionForceEstimateNode(Node):
 		)
 		self.create_service(Trigger, 'tare', self._handle_tare)
 		self.create_service(Trigger, 'trigger_retention_recording', self._handle_start_recording)
+		self.create_service(Trigger, 'end_retention_recording', self._handle_end_recording)
 
 		self._connect_serial()
 		if bool(self.get_parameter('tare_on_startup').value):
@@ -168,10 +170,39 @@ class RetentionForceEstimateNode(Node):
 			response.success = False
 			response.message = 'record_data is disabled.'
 			return response
+		if self._recording_active:
+			response.success = False
+			response.message = 'Retention-force recording is already in progress.'
+			return response
 
 		self._start_recording_window()
 		response.success = True
 		response.message = 'Retention-force recording started.'
+		self.get_logger().info(response.message)
+		return response
+
+	def _handle_end_recording(self, _request: Trigger.Request, response: Trigger.Response) -> Trigger.Response:
+		if not bool(self.get_parameter('record_data').value):
+			response.success = False
+			response.message = 'record_data is disabled.'
+			return response
+		if not self._recording_active:
+			response.success = False
+			response.message = 'Retention-force recording is not active.'
+			return response
+
+		self._recording_active = False
+		if not self._samples:
+			response.success = False
+			response.message = 'No retention-force samples were collected.'
+			return response
+
+		if not self._recording_saved:
+			self._write_outputs()
+			self._recording_saved = True
+
+		response.success = True
+		response.message = 'Retention-force recording ended and data saved.'
 		self.get_logger().info(response.message)
 		return response
 
@@ -242,17 +273,17 @@ class RetentionForceEstimateNode(Node):
 			self._tare_sensor()
 
 		self._run_test_reads()
-		object_name, trial_number, duration = self._prompt_run_configuration()
+		object_name, trial_id, duration = self._prompt_run_configuration()
 
 		print(f'\nTest configuration:')
 		print(f'  Object: {object_name}')
-		print(f'  Trial: {trial_number}')
+		print(f'  Trial ID: {trial_id}')
 		print(f'  Duration: {duration:g}s')
 		print(f"  Save path: {Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()}")
 
 		input('\nPress Enter to start data acquisition...\n')
 		result = self._collect_interactive_samples(duration)
-		csv_path, plot_path = self._write_session_outputs(trial_number, object_name, result.samples)
+		csv_path, plot_path = self._write_session_outputs(trial_id, object_name, result.samples)
 		self._print_summary(result, csv_path, plot_path)
 
 	def _run_test_reads(self) -> None:
@@ -267,20 +298,20 @@ class RetentionForceEstimateNode(Node):
 
 	def _prompt_run_configuration(self) -> tuple[str, str, float]:
 		default_object_name = str(self.get_parameter('default_object_name').value)
-		default_trial_number = str(self.get_parameter('default_trial_number').value)
+		default_trial_id = self._format_trial_id(self._next_trial_id)
 		default_duration = float(self.get_parameter('default_duration_sec').value)
 
 		print('\n' + '=' * 70)
 		object_name = input(f'Test object name (default: {default_object_name}): ').strip()
-		trial_number = input(f'Trial number (default: {default_trial_number}): ').strip()
+		trial_id = input(f'Trial ID (default: {default_trial_id}): ').strip()
 		duration_text = input(f'Acquisition duration (s, default: {default_duration:g}): ').strip()
 
 		object_name = object_name if object_name else default_object_name
-		trial_number = trial_number if trial_number else default_trial_number
+		trial_id = trial_id if trial_id else default_trial_id
 		duration = float(duration_text) if duration_text else default_duration
 		if duration <= 0.0:
 			raise RuntimeError('Acquisition duration must be greater than 0.0 seconds.')
-		return object_name, trial_number, duration
+		return object_name, trial_id, duration
 
 	def _collect_interactive_samples(self, duration: float) -> AcquisitionResult:
 		print('=' * 70)
@@ -358,20 +389,22 @@ class RetentionForceEstimateNode(Node):
 	def _write_outputs(self) -> None:
 		if not self._samples:
 			return
+		trial_id = self._format_trial_id(self._next_trial_id)
 		self._write_session_outputs(
-			trial_number=str(self.get_parameter('default_trial_number').value),
+			trial_id=trial_id,
 			object_name=str(self.get_parameter('default_object_name').value),
 			samples=self._samples,
 		)
+		self._next_trial_id += 1
 
-	def _write_session_outputs(self, trial_number: str, object_name: str, samples: list[ForceSample]) -> tuple[Path, Optional[Path]]:
+	def _write_session_outputs(self, trial_id: str, object_name: str, samples: list[ForceSample]) -> tuple[Path, Optional[Path]]:
 		if not samples:
 			raise RuntimeError('No valid data collected.')
 
 		output_dir = Path(str(self.get_parameter('output_dir').value)).expanduser().resolve()
 		output_dir.mkdir(parents=True, exist_ok=True)
 		timestamp = time.strftime('%Y%m%d-%H%M%S')
-		filename = f'{trial_number}_{object_name}_{timestamp}'
+		filename = f'{trial_id}_{object_name}_{timestamp}'
 		csv_path = output_dir / f'{filename}.csv'
 
 		with csv_path.open('w', newline='', encoding='ascii') as handle:
@@ -391,6 +424,17 @@ class RetentionForceEstimateNode(Node):
 			plot_path = output_dir / f'{filename}.png'
 			self._save_plot(samples, plot_path)
 		return csv_path, plot_path
+
+	def _load_trial_id_state(self) -> tuple[int, int]:
+		trial_id_text = str(self.get_parameter('default_trial_id').value).strip()
+		if not trial_id_text:
+			raise RuntimeError('default_trial_id must not be empty.')
+		if not trial_id_text.isdigit():
+			raise RuntimeError('default_trial_id must contain only decimal digits.')
+		return int(trial_id_text), len(trial_id_text)
+
+	def _format_trial_id(self, trial_id: int) -> str:
+		return str(trial_id).zfill(self._trial_id_width)
 
 	def _save_plot(self, samples: list[ForceSample], plot_path: Path) -> None:
 		figure, axis = plt.subplots(figsize=(10.0, 5.0))

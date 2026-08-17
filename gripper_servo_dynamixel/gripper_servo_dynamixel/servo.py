@@ -18,10 +18,13 @@ class DynamixelServoConfig:
     addr_operating_mode: int = 11
     addr_current_limit: int = 38
     addr_torque_enable: int = 64
+    addr_hardware_error_status: int = 70
     addr_goal_current: int = 102
     addr_goal_position: int = 116
     addr_present_current: int = 126
     addr_present_position: int = 132
+    addr_present_input_voltage: int = 144
+    addr_present_temperature: int = 146
     operating_mode_current: int = 0
     operating_mode_position: int = 3
     operating_mode_current_based_position: int = 5
@@ -76,10 +79,13 @@ class DynamixelServoConfig:
             addr_operating_mode=int(declare('addr_operating_mode', 11)),
             addr_current_limit=int(declare('addr_current_limit', 38)),
             addr_torque_enable=int(declare('addr_torque_enable', 64)),
+            addr_hardware_error_status=int(declare('addr_hardware_error_status', 70)),
             addr_goal_current=int(declare('addr_goal_current', 102)),
             addr_goal_position=int(declare('addr_goal_position', 116)),
             addr_present_current=int(declare('addr_present_current', 126)),
             addr_present_position=int(declare('addr_present_position', 132)),
+            addr_present_input_voltage=int(declare('addr_present_input_voltage', 144)),
+            addr_present_temperature=int(declare('addr_present_temperature', 146)),
             operating_mode_current=int(declare('operating_mode_current', 0)),
             operating_mode_position=int(declare('operating_mode_position', 3)),
             operating_mode_current_based_position=int(declare('operating_mode_current_based_position', 5)),
@@ -158,10 +164,13 @@ class DynamixelProtocol2Driver:
         addr_operating_mode: int,
         addr_current_limit: int,
         addr_torque_enable: int,
+        addr_hardware_error_status: int,
         addr_goal_current: int,
         addr_goal_position: int,
         addr_present_current: int,
         addr_present_position: int,
+        addr_present_input_voltage: int,
+        addr_present_temperature: int,
         operating_mode_current: int,
         operating_mode_position: int,
         operating_mode_current_based_position: int,
@@ -190,10 +199,13 @@ class DynamixelProtocol2Driver:
         self.addr_operating_mode = int(addr_operating_mode)
         self.addr_current_limit = int(addr_current_limit)
         self.addr_torque_enable = int(addr_torque_enable)
+        self.addr_hardware_error_status = int(addr_hardware_error_status)
         self.addr_goal_current = int(addr_goal_current)
         self.addr_goal_position = int(addr_goal_position)
         self.addr_present_current = int(addr_present_current)
         self.addr_present_position = int(addr_present_position)
+        self.addr_present_input_voltage = int(addr_present_input_voltage)
+        self.addr_present_temperature = int(addr_present_temperature)
 
         self.mode_current = int(operating_mode_current)
         self.mode_position = int(operating_mode_position)
@@ -282,7 +294,72 @@ class DynamixelProtocol2Driver:
         if comm_result != 0:
             raise RuntimeError(f'{op} communication failed: {self._packet.getTxRxResult(comm_result)}')
         if dxl_error != 0:
-            raise RuntimeError(f'{op} returned error: {self._packet.getRxPacketError(dxl_error)}')
+            details = self._build_error_details()
+            suffix = f' ({details})' if details else ''
+            raise RuntimeError(f'{op} returned error: {self._packet.getRxPacketError(dxl_error)}{suffix}')
+
+    def _read_register_1byte_no_raise(self, address: int) -> tuple[Optional[int], Optional[str]]:
+        try:
+            data, comm_result, dxl_error = self._normalize_sdk_result(
+                'read_register_1byte_no_raise',
+                self._packet.read1ByteTxRx(self._port, self._servo_id, int(address)),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return None, str(exc)
+
+        if comm_result != 0:
+            return None, self._packet.getTxRxResult(comm_result)
+        if dxl_error != 0:
+            return None, self._packet.getRxPacketError(dxl_error)
+        return int(data), None
+
+    def _decode_hardware_error_status(self, status: int) -> str:
+        known_bits = {
+            0: 'input_voltage',
+            2: 'overheating',
+            3: 'motor_encoder',
+            4: 'electrical_shock',
+            5: 'overload',
+        }
+        names: list[str] = []
+        remaining = int(status)
+        for bit, name in known_bits.items():
+            if status & (1 << bit):
+                names.append(name)
+                remaining &= ~(1 << bit)
+        bit_index = 0
+        while remaining:
+            if remaining & 1:
+                names.append(f'bit{bit_index}')
+            remaining >>= 1
+            bit_index += 1
+        return '|'.join(names) if names else 'none'
+
+    def _build_error_details(self) -> str:
+        parts: list[str] = []
+
+        hardware_status, hardware_error = self._read_register_1byte_no_raise(self.addr_hardware_error_status)
+        if hardware_status is not None:
+            parts.append(
+                'hardware_error_status=' +
+                f'0x{hardware_status:02X}:{self._decode_hardware_error_status(hardware_status)}'
+            )
+        elif hardware_error is not None:
+            parts.append(f'hardware_error_status_unavailable={hardware_error}')
+
+        present_voltage_raw, present_voltage_error = self._read_register_1byte_no_raise(self.addr_present_input_voltage)
+        if present_voltage_raw is not None:
+            parts.append(f'present_input_voltage={present_voltage_raw / 10.0:.1f}V')
+        elif present_voltage_error is not None:
+            parts.append(f'present_input_voltage_unavailable={present_voltage_error}')
+
+        present_temperature, present_temperature_error = self._read_register_1byte_no_raise(self.addr_present_temperature)
+        if present_temperature is not None:
+            parts.append(f'present_temperature={present_temperature}C')
+        elif present_temperature_error is not None:
+            parts.append(f'present_temperature_unavailable={present_temperature_error}')
+
+        return ', '.join(parts)
 
     def set_operating_mode(self, mode: int) -> None:
         _, comm, err = self._with_retry(
@@ -366,10 +443,13 @@ class DynamixelServo:
             addr_operating_mode=config.addr_operating_mode,
             addr_current_limit=config.addr_current_limit,
             addr_torque_enable=config.addr_torque_enable,
+            addr_hardware_error_status=config.addr_hardware_error_status,
             addr_goal_current=config.addr_goal_current,
             addr_goal_position=config.addr_goal_position,
             addr_present_current=config.addr_present_current,
             addr_present_position=config.addr_present_position,
+            addr_present_input_voltage=config.addr_present_input_voltage,
+            addr_present_temperature=config.addr_present_temperature,
             operating_mode_current=config.operating_mode_current,
             operating_mode_position=config.operating_mode_position,
             operating_mode_current_based_position=config.operating_mode_current_based_position,
