@@ -120,8 +120,9 @@ These *must* match your motor model’s control table register addresses for the
 # Torque behavior
 
 - Position mode keeps moving toward the requested open/close target until it reaches the target or the measured torque exceeds `safety_torque_limit`.
-- When the safety limit is hit, the node writes the current position back as the hold target, so the gripper stops without reopening.
+- When the safety limit is hit in position mode, the node writes the current position back as the hold target, so the gripper stops without reopening.
 - Dynamixel torque mode uses `control_torque` unless the action goal supplies a non-zero `command.max_effort`, and it clamps that request against the configured `safety_torque_limit` and `stall_torque` before converting it to raw Goal Current.
+- After a Dynamixel torque-mode goal reaches its requested torque or the safety torque limit, the node switches into pure current mode and keeps holding that torque until the next command changes the mode or target.
 - Feetech torque mode is an approximation: it applies a torque-limit register value derived from `command.max_effort` or `control_torque`, clamps that request against `safety_torque_limit` and `stall_torque` when configured, and stops once the measured torque estimate reaches the requested threshold.
 
 ## Calibrating `torque_per_current_unit`

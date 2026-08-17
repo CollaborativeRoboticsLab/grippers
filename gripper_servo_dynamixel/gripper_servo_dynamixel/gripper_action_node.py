@@ -159,6 +159,11 @@ class DynamixelServoActionNode(Node):
         self._servo.write_goal_position(hold_ticks)
         return hold_ticks
 
+    def _hold_current_torque(self, torque: float) -> None:
+        if self._servo is None:
+            return
+        self._apply_torque(torque, target_position=None)
+
     def _apply_position(self, target_position: float) -> int:
         if self._servo is None:
             raise RuntimeError('Servo is not initialized.')
@@ -209,8 +214,12 @@ class DynamixelServoActionNode(Node):
 
         start_time = time.monotonic()
         start_pos: Optional[int] = None
+        previous_pos: Optional[int] = None
+        last_motion_time = start_time
+        made_progress = False
         if self._servo is not None:
             start_pos = self._read_present_position()
+            previous_pos = start_pos
 
         while True:
             if goal_handle.is_cancel_requested:
@@ -227,6 +236,11 @@ class DynamixelServoActionNode(Node):
                 self._handle_position_feedback(pos)
                 applied_torque = self._read_present_torque()
                 err = abs(int(target_ticks) - int(pos))
+                if previous_pos is None or abs(int(pos) - int(previous_pos)) > tolerance:
+                    last_motion_time = time.monotonic()
+                    previous_pos = pos
+                if start_pos is not None and abs(int(pos) - int(start_pos)) > tolerance:
+                    made_progress = True
                 if err <= tolerance:
                     goal_handle.publish_feedback(feedback_cls(progress=1.0))
                     return MotionLoopResult(success=True, reason='position_reached')
@@ -237,14 +251,29 @@ class DynamixelServoActionNode(Node):
                     and abs(target_torque) > 0.0
                     and abs(applied_torque) >= abs(target_torque)
                 ):
-                    self._hold_current_position(pos)
+                    self._hold_current_torque(target_torque)
                     goal_handle.publish_feedback(feedback_cls(progress=1.0))
                     return MotionLoopResult(success=True, reason='target_torque_reached')
 
                 if safety_torque_limit > 0.0 and abs(applied_torque) >= abs(safety_torque_limit):
-                    self._hold_current_position(pos)
+                    hold_torque = target_torque
+                    if math.isclose(hold_torque, 0.0):
+                        hold_torque = math.copysign(abs(safety_torque_limit), applied_torque)
+                    self._hold_current_torque(hold_torque)
                     goal_handle.publish_feedback(feedback_cls(progress=1.0))
                     return MotionLoopResult(success=True, reason='safety_torque_limit_reached')
+
+                stall_elapsed = time.monotonic() - last_motion_time
+                if (
+                    use_torque_mode
+                    and abs(target_torque) > 0.0
+                    and made_progress
+                    and elapsed >= torque_reached_min_duration_sec
+                    and stall_elapsed >= torque_reached_min_duration_sec
+                ):
+                    self._hold_current_torque(target_torque)
+                    goal_handle.publish_feedback(feedback_cls(progress=1.0))
+                    return MotionLoopResult(success=True, reason='motion_stalled_under_torque')
 
                 if start_pos is not None:
                     start_err = max(1, abs(int(target_ticks) - int(start_pos)))
@@ -269,6 +298,7 @@ class DynamixelServoActionNode(Node):
         success_message: str,
         torque_reached_message: str,
         safety_limit_message: str,
+        stall_hold_message: str,
         timeout_message: str,
         canceled_message: str,
         failure_prefix: str,
@@ -301,6 +331,10 @@ class DynamixelServoActionNode(Node):
             if motion_result.reason == 'safety_torque_limit_reached':
                 goal_handle.succeed()
                 return result_cls(success=True, message=safety_limit_message)
+
+            if motion_result.reason == 'motion_stalled_under_torque':
+                goal_handle.succeed()
+                return result_cls(success=True, message=stall_hold_message)
 
             goal_handle.succeed()
             return result_cls(success=True, message=success_message)
@@ -363,8 +397,9 @@ class DynamixelServoActionNode(Node):
             use_torque_mode=use_torque_mode,
             already_message='Servo already at requested position.',
             success_message='Servo command sent.',
-            torque_reached_message='Servo reached the requested torque and is holding position.',
-            safety_limit_message='Servo reached the safety torque limit and is holding position.',
+            torque_reached_message='Servo reached the requested torque and is holding torque.',
+            safety_limit_message='Servo reached the safety torque limit and is holding torque.',
+            stall_hold_message='Servo stalled under the requested torque and is holding torque.',
             timeout_message='Servo command timed out or was canceled.',
             canceled_message='Servo command was canceled.',
             failure_prefix='Servo control failed',

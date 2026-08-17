@@ -13,6 +13,7 @@ import matplotlib
 if not os.environ.get('DISPLAY') and not os.environ.get('WAYLAND_DISPLAY'):
 	matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from rcl_interfaces.msg import ParameterDescriptor
 import rclpy
 from rclpy.node import Node
 from serial import Serial, SerialException
@@ -91,11 +92,16 @@ class RetentionForceEstimateNode(Node):
 		self.declare_parameter('test_read_count', 5)
 		self.declare_parameter('test_read_delay_sec', 0.2)
 		self.declare_parameter('default_object_name', 'test_object')
-		self.declare_parameter('default_trial_number', '001')
+		self.declare_parameter(
+			'default_trial_number',
+			'001',
+			ParameterDescriptor(dynamic_typing=True),
+		)
 		self.declare_parameter('default_duration_sec', 10.0)
 		self.declare_parameter('force_topic', 'retention_force/force')
 		self.declare_parameter('valid_topic', 'retention_force/valid')
 		self.declare_parameter('record_data', False)
+		self.declare_parameter('wait_for_start_trigger', False)
 		self.declare_parameter('output_dir', str(default_output_dir))
 		self.declare_parameter('output_basename', 'retention_force')
 		self.declare_parameter('save_plot', True)
@@ -107,6 +113,8 @@ class RetentionForceEstimateNode(Node):
 		self._start_time = time.time()
 		self._serial_port = ''
 		self._timer = None
+		self._recording_active = False
+		self._recording_saved = False
 
 		self._force_publisher = self.create_publisher(
 			Float64,
@@ -119,10 +127,12 @@ class RetentionForceEstimateNode(Node):
 			10,
 		)
 		self.create_service(Trigger, 'tare', self._handle_tare)
+		self.create_service(Trigger, 'trigger_retention_recording', self._handle_start_recording)
 
 		self._connect_serial()
 		if bool(self.get_parameter('tare_on_startup').value):
 			self._tare_sensor()
+		self._configure_recording_state_for_mode()
 
 		if not self.is_interactive_mode():
 			poll_rate_hz = float(self.get_parameter('poll_rate_hz').value)
@@ -134,6 +144,36 @@ class RetentionForceEstimateNode(Node):
 
 	def is_interactive_mode(self) -> bool:
 		return bool(self.get_parameter('interactive_mode').value)
+
+	def _configure_recording_state_for_mode(self) -> None:
+		if self.is_interactive_mode():
+			self._recording_active = False
+			return
+
+		if not bool(self.get_parameter('record_data').value):
+			self._recording_active = False
+			return
+
+		self._recording_active = not bool(self.get_parameter('wait_for_start_trigger').value)
+
+	def _start_recording_window(self) -> None:
+		self._samples = []
+		self._last_force = None
+		self._start_time = time.time()
+		self._recording_active = True
+		self._recording_saved = False
+
+	def _handle_start_recording(self, _request: Trigger.Request, response: Trigger.Response) -> Trigger.Response:
+		if not bool(self.get_parameter('record_data').value):
+			response.success = False
+			response.message = 'record_data is disabled.'
+			return response
+
+		self._start_recording_window()
+		response.success = True
+		response.message = 'Retention-force recording started.'
+		self.get_logger().info(response.message)
+		return response
 
 	def _connect_serial(self) -> None:
 		configured_port = str(self.get_parameter('port').value).strip()
@@ -272,8 +312,14 @@ class RetentionForceEstimateNode(Node):
 
 	def _poll_force(self) -> None:
 		sample = self._acquire_sample(start_time=self._start_time, publish=True)
-		if bool(self.get_parameter('record_data').value):
+		if bool(self.get_parameter('record_data').value) and self._recording_active:
 			self._samples.append(sample)
+			default_duration_sec = float(self.get_parameter('default_duration_sec').value)
+			if default_duration_sec > 0.0 and sample.elapsed_seconds >= default_duration_sec:
+				self._recording_active = False
+				if not self._recording_saved:
+					self._write_outputs()
+					self._recording_saved = True
 		if sample.valid:
 			self.get_logger().debug(f'Force={sample.force_newtons:.3f} N at t={sample.elapsed_seconds:.3f}s')
 
@@ -313,8 +359,8 @@ class RetentionForceEstimateNode(Node):
 		if not self._samples:
 			return
 		self._write_session_outputs(
-			trial_number='continuous',
-			object_name=str(self.get_parameter('output_basename').value),
+			trial_number=str(self.get_parameter('default_trial_number').value),
+			object_name=str(self.get_parameter('default_object_name').value),
 			samples=self._samples,
 		)
 
@@ -396,7 +442,7 @@ class RetentionForceEstimateNode(Node):
 
 	def destroy_node(self) -> bool:
 		try:
-			if bool(self.get_parameter('record_data').value):
+			if bool(self.get_parameter('record_data').value) and self._samples and not self._recording_saved:
 				self._write_outputs()
 		finally:
 			if self._serial is not None and self._serial.is_open:
@@ -426,7 +472,8 @@ def main(args: Optional[list[str]] = None) -> None:
 	finally:
 		if node is not None:
 			node.destroy_node()
-		rclpy.shutdown()
+		if rclpy.ok():
+			rclpy.shutdown()
 
 
 if __name__ == '__main__':

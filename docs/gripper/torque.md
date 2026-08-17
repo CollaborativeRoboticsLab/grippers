@@ -26,8 +26,8 @@ Torque mode is enabled when either of the following is true:
 During execution, the stop conditions are checked in this order:
 
 1. If the position target is reached, the goal succeeds normally.
-2. If torque mode is active and measured effort reaches the requested target effort, the node holds position and reports success.
-3. If measured effort reaches `safety_torque_limit`, the node holds position and reports success at the safety limit.
+2. If torque mode is active and measured effort reaches the requested target effort, the node switches into current hold and reports success.
+3. If measured effort reaches `safety_torque_limit`, the node switches into current hold and reports success at the safety limit.
 
 Before the command is written to Dynamixel, the requested effort is clamped to the lowest configured ceiling among:
 
@@ -66,7 +66,7 @@ The numeric unit is only physically meaningful after the active backend is calib
 
 - Dynamixel: if `torque_per_current_unit` and `max_effort_to_torque_factor` are calibrated, gripper-level `command.max_effort` can be treated as force at the fingers while the low-level servo action still uses torque units.
 - Dynamixel position mode monitors measured torque and stops at `safety_torque_limit` without reopening the gripper.
-- Dynamixel torque mode uses the resolved requested effort above and stops once that requested effort is reached while holding position.
+- Dynamixel torque mode uses the resolved requested effort above and, once contact effort is reached, switches from current-based position mode into pure current mode so the gripper keeps holding torque until the next command.
 - Feetech: if `torque_limit_per_torque_unit`, `torque_per_current_unit`, and the gripper geometry are calibrated, `command.max_effort` can also be treated in a physical unit.
 - Feetech still uses an approximate torque mode implemented through a torque-limit register plus current monitoring, not true current-based position control.
 

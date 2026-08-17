@@ -50,6 +50,9 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             10,
         )
         self._joint_state_timer = None
+        self._last_joint_state_ticks: Optional[int] = None
+        self._last_measured_torque: Optional[float] = None
+        self._last_joint_state_feedback_warning_ns = 0
 
         if bool(self.get_parameter('publish_gripper_joint_states').value):
             rate_hz = float(self.get_parameter('gripper_joint_state_rate_hz').value)
@@ -147,12 +150,23 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
         try:
             current_ticks = self._read_present_position()
+            self._last_joint_state_ticks = int(current_ticks)
             command_units = self._servo.ticks_to_command_units(current_ticks)
             self._publish_gripper_joint_states(command_units)
         except Exception as exc:  # noqa: BLE001
-            self.get_logger().warning(
-                f'Failed to publish gripper joint states from feedback: {type(exc).__name__}: {exc}'
-            )
+            if self._servo is not None and self._last_joint_state_ticks is not None:
+                command_units = self._servo.ticks_to_command_units(self._last_joint_state_ticks)
+                self._publish_gripper_joint_states(command_units)
+
+            now_ns = self.get_clock().now().nanoseconds
+            if now_ns - self._last_joint_state_feedback_warning_ns >= int(2e9):
+                fallback_suffix = ''
+                if self._last_joint_state_ticks is not None:
+                    fallback_suffix = ' Using last known gripper position for joint-state publication.'
+                self.get_logger().warning(
+                    f'Failed to publish gripper joint states from feedback: {type(exc).__name__}: {exc}.{fallback_suffix}'
+                )
+                self._last_joint_state_feedback_warning_ns = now_ns
 
     def _publish_gripper_joint_states_timer_cb(self) -> None:
         self._publish_gripper_joint_states_from_feedback()
@@ -160,8 +174,12 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
     def _handle_position_feedback(self, current_ticks: int) -> None:
         if self._servo is None:
             return
+        self._last_joint_state_ticks = int(current_ticks)
         command_units = self._servo.ticks_to_command_units(current_ticks)
         self._publish_gripper_joint_states(command_units)
+
+    def _handle_torque_feedback(self, current_torque: float) -> None:
+        self._last_measured_torque = float(current_torque)
 
     def _handle_servo_unavailable_feedback(self) -> None:
         self._publish_gripper_joint_states(command_position_value=0.0)
@@ -195,16 +213,41 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
 
         return float(effort) * factor
 
+    def _gripper_torque_to_effort(self, torque: float) -> Optional[float]:
+        if self._bypass_max_effort():
+            return None
+
+        factor = self._max_effort_to_torque_factor()
+        if math.isclose(factor, 0.0):
+            return None
+
+        return float(torque) / factor
+
     def _log_gripper_action_request(self, action_name: str, *, effort: float, torque: float, use_torque_mode: bool) -> None:
         self.get_logger().info(
-            f'{action_name} requested (effort_N={effort:.3f}, torque={torque:.3f}, use_torque_mode={use_torque_mode}, safety_torque_limit={self._servo_config.safety_torque_limit:.3f})'
+            f'{action_name} requested (target_effort_N={effort:.3f}, target_torque={torque:.3f}, use_torque_mode={use_torque_mode}, safety_torque_limit={self._servo_config.safety_torque_limit:.3f})'
         )
 
-    def _log_gripper_action_result(self, action_name: str, result_message: str, *, success: bool) -> None:
+    def _log_gripper_action_result(
+        self,
+        action_name: str,
+        result_message: str,
+        *,
+        success: bool,
+        target_effort: float,
+        measured_effort: Optional[float],
+        measured_torque: Optional[float],
+    ) -> None:
+        measurement_summary = f'target_effort_N={target_effort:.3f}'
+        if measured_effort is not None:
+            measurement_summary += f', measured_effort_N={measured_effort:.3f}'
+        if measured_torque is not None:
+            measurement_summary += f', measured_torque={measured_torque:.3f}'
+
         if success:
-            self.get_logger().info(f'{action_name} result: {result_message}')
+            self.get_logger().info(f'{action_name} result: {result_message} ({measurement_summary})')
         else:
-            self.get_logger().warning(f'{action_name} result: {result_message}')
+            self.get_logger().warning(f'{action_name} result: {result_message} ({measurement_summary})')
 
     def _configured_gripper_open_width(self) -> float:
         configured_width = float(self.get_parameter('gripper_open_width').value)
@@ -279,14 +322,34 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             )
             return float(fallback_width)
 
+    def _current_gripper_effort(self, fallback_effort: float) -> float:
+        measured_torque = self._last_measured_torque
+        if measured_torque is None:
+            return float(fallback_effort)
+
+        measured_effort = self._gripper_torque_to_effort(measured_torque)
+        if measured_effort is None:
+            return float(fallback_effort)
+        return float(measured_effort)
+
+    def _is_opening_goal(self, target_width: float) -> bool:
+        try:
+            current_width = self._current_gripper_width(float(target_width))
+        except Exception:  # noqa: BLE001
+            return False
+
+        tolerance = float(self.get_parameter('gripper_position_tolerance').value)
+        return float(target_width) > (current_width + tolerance)
+
     def _make_gripper_command_feedback(self, target_width: float, effort: float):
         def make_feedback(progress: float = 0.0) -> GripperCommand.Feedback:
             progress = max(0.0, min(1.0, float(progress)))
             current_width = self._current_gripper_width(float(target_width))
+            current_effort = self._current_gripper_effort(float(effort))
             tolerance = float(self.get_parameter('gripper_position_tolerance').value)
             feedback = GripperCommand.Feedback()
             feedback.position = current_width
-            feedback.effort = float(effort)
+            feedback.effort = current_effort
             feedback.stalled = False
             feedback.reached_goal = progress >= 1.0 and math.isclose(current_width, float(target_width), rel_tol=0.0, abs_tol=tolerance)
             return feedback
@@ -296,12 +359,21 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
     def _make_gripper_command_result(self, target_width: float, effort: float, action_name: str):
         def make_result(success: bool, message: str) -> GripperCommand.Result:
             stalled = 'effort' in message.lower() or 'torque' in message.lower() or 'safety' in message.lower()
+            measured_torque = self._last_measured_torque
+            measured_effort = self._gripper_torque_to_effort(measured_torque) if measured_torque is not None else None
             result = GripperCommand.Result()
             result.position = self._current_gripper_width(float(target_width))
-            result.effort = float(effort)
+            result.effort = self._current_gripper_effort(float(effort))
             result.stalled = bool(success and stalled)
             result.reached_goal = bool(success and not stalled)
-            self._log_gripper_action_result(action_name, message, success=bool(success))
+            self._log_gripper_action_result(
+                action_name,
+                message,
+                success=bool(success),
+                target_effort=float(effort),
+                measured_effort=measured_effort,
+                measured_torque=measured_torque,
+            )
             return result
 
         return make_result
@@ -311,7 +383,17 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         target_width = self._gripper_command_position_to_width(float(goal.command.position))
         target_position = self._gripper_width_to_command_position(target_width)
         requested_effort = float(goal.command.max_effort)
-        if self._bypass_max_effort():
+        is_opening_goal = self._is_opening_goal(target_width)
+
+        if is_opening_goal:
+            if abs(requested_effort) > 0.0:
+                self.get_logger().warning(
+                    f'Ignoring command.max_effort={requested_effort:.3f} for opening gripper goal targeting width={target_width:.6f}.'
+                )
+            use_torque_mode = False
+            effort = 0.0
+            torque = 0.0
+        elif self._bypass_max_effort():
             use_torque_mode = self._resolve_use_torque_mode(abs(requested_effort) > 0.0)
             effort = float(requested_effort)
             torque = self._resolve_torque(requested_effort, use_torque_mode=use_torque_mode)
@@ -337,8 +419,9 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             use_torque_mode=use_torque_mode,
             already_message='Gripper already at requested position.',
             success_message='Gripper command sent.',
-            torque_reached_message='Gripper reached the requested effort and is holding position.',
-            safety_limit_message='Gripper stopped at the safety effort limit and is holding position.',
+            torque_reached_message='Gripper reached the requested effort and is holding torque.',
+            safety_limit_message='Gripper stopped at the safety effort limit and is holding torque.',
+            stall_hold_message='Gripper stalled under the requested effort and is holding torque.',
             timeout_message='Gripper command timed out or was canceled.',
             canceled_message='Gripper command was canceled.',
             failure_prefix='Gripper command failed',
