@@ -9,16 +9,23 @@ def generate_launch_description() -> LaunchDescription:
     motor_params_file = LaunchConfiguration('motor_params_file')
     gripper_params_file = LaunchConfiguration('gripper_params_file')
     bypass_max_effort = LaunchConfiguration('bypass_max_effort')
+    gripper_joint_state_topic = LaunchConfiguration('gripper_joint_state_topic')
 
     gripper_node = Node(
         package='gripper_two_fingers',
         executable='gripper_two_fingers_node',
         name='gripper_two_fingers_node',
         output='screen',
+        remappings=[
+            ('gripper_joint_states', gripper_joint_state_topic),
+            ('/gripper_joint_states', gripper_joint_state_topic),
+        ],
         parameters=[
             motor_params_file,
             gripper_params_file,
-            {'bypass_max_effort': bypass_max_effort},
+            {
+                'bypass_max_effort': bypass_max_effort,
+            },
         ],
     )
 
@@ -43,6 +50,11 @@ def generate_launch_description() -> LaunchDescription:
                 'bypass_max_effort',
                 default_value='false',
                 description='When true, gripper-level command.max_effort bypasses force conversion and is treated as direct torque.',
+            ),
+            DeclareLaunchArgument(
+                'gripper_joint_state_topic',
+                default_value='gripper_joint_states',
+                description='Topic used to publish gripper joint states.',
             ),
             gripper_node,
         ]
