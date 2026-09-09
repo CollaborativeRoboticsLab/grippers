@@ -7,6 +7,7 @@
 - `gripper_two_fingers`: gripper-level two-finger Dynamixel wrapper (Python).
 - `gripper_feetech_test`: gripper-level Feetech test wrapper (C++).
 - `gripper_ros`: launch files + centralized motor/gripper parameter YAMLs.
+- `gripper_camera` : launch files for the gripper mounted camera. currently tested with realsense cameras
 
 ## Action API
 
@@ -65,6 +66,15 @@ ros2 action send_goal /gripper_command control_msgs/action/GripperCommand "{comm
 ```
 
 For calibration/debugging only, the gripper wrapper also exposes a `bypass_max_effort` parameter. When enabled, gripper-level `max_effort` bypasses `max_effort_to_torque_factor` and is treated directly as low-level torque.
+
+## Gripper camera
+
+To start the camera
+
+```bash
+source install/setup.bash
+ros2 launch gripper_camera d435.launch.py`
+```
 
 ### Gripper calibration
 
