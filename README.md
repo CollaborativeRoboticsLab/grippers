@@ -73,7 +73,7 @@ To start the camera
 
 ```bash
 source install/setup.bash
-ros2 launch gripper_camera d435.launch.py`
+ros2 launch gripper_camera d435.launch.py
 ```
 
 ### Gripper calibration

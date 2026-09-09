@@ -18,10 +18,11 @@ from launch import LaunchDescription
 import launch_ros.actions
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, LogInfo
 from launch.substitutions import LaunchConfiguration
+from launch_ros.parameter_descriptions import ParameterValue
 
 configurable_parameters = [{'name': 'camera_name',                  'default': 'gripper_camera', 'description': 'camera unique name'},
                            {'name': 'camera_namespace',             'default': 'gripper_camera', 'description': 'namespace for camera'},
-                           {'name': 'serial_no',                    'default': "''", 'description': 'choose device by serial number'},
+                           {'name': 'serial_no',                    'default': '317422071650', 'description': 'choose device by serial number'},
                            {'name': 'usb_port_id',                  'default': "''", 'description': 'choose device by usb port id'},
                            {'name': 'device_type',                  'default': "''", 'description': 'choose device by type'},
                            {'name': 'config_file',                  'default': "''", 'description': 'yaml config file'},
@@ -108,7 +109,11 @@ def declare_configurable_parameters(parameters):
     return [DeclareLaunchArgument(param['name'], default_value=param['default'], description=param['description']) for param in parameters]
 
 def set_configurable_parameters(parameters):
-    return dict([(param['name'], LaunchConfiguration(param['name'])) for param in parameters])
+    return {
+        param['name']: ParameterValue(LaunchConfiguration(param['name']), value_type=str)
+        if param['name'] == 'serial_no' else LaunchConfiguration(param['name'])
+        for param in parameters
+    }
 
 def yaml_to_dict(path_to_yaml):
     with open(path_to_yaml, "r") as f:
