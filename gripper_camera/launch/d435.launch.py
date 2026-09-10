@@ -21,7 +21,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 
 configurable_parameters = [{'name': 'camera_name',                  'default': 'gripper_camera', 'description': 'camera unique name'},
-                           {'name': 'camera_namespace',             'default': 'gripper_camera', 'description': 'namespace for camera'},
+                           {'name': 'camera_namespace',             'default': '', 'description': 'namespace for camera'},
                            {'name': 'serial_no',                    'default': '317422071650', 'description': 'choose device by serial number'},
                            {'name': 'usb_port_id',                  'default': "''", 'description': 'choose device by usb port id'},
                            {'name': 'device_type',                  'default': "''", 'description': 'choose device by type'},
