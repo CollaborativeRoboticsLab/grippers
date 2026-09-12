@@ -302,10 +302,11 @@ class DynamixelServoActionNode(Node):
         timeout_message: str,
         canceled_message: str,
         failure_prefix: str,
+        check_already_at_target: bool = True,
     ):
         try:
             requested_ticks = self._servo.position_to_ticks(target_position) if self._servo is not None else None
-            if requested_ticks is not None and self._is_at_target(requested_ticks):
+            if check_already_at_target and requested_ticks is not None and self._is_at_target(requested_ticks):
                 goal_handle.succeed()
                 return result_cls(success=True, message=already_message)
 

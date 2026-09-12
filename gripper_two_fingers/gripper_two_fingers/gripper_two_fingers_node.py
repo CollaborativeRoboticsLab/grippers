@@ -385,6 +385,10 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
         requested_effort = float(goal.command.max_effort)
         is_opening_goal = self._is_opening_goal(target_width)
 
+        self.get_logger().info(
+            f'gripper_command resolved target_width_m={target_width:.6f}, servo_target={target_position:.3f}, requested_effort_N={requested_effort:.3f}'
+        )
+
         if is_opening_goal:
             if abs(requested_effort) > 0.0:
                 self.get_logger().warning(
@@ -425,6 +429,7 @@ class GripperTwoFingersNode(DynamixelServoActionNode):
             timeout_message='Gripper command timed out or was canceled.',
             canceled_message='Gripper command was canceled.',
             failure_prefix='Gripper command failed',
+            check_already_at_target=False,
         )
 
     def destroy_node(self) -> bool:
